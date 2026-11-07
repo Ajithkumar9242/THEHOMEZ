@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { UserType, UserStatus, type IOtpRequestResponse } from '@thehomez/shared-types';
 import { PhoneOtpModel } from '../../models/phone-otp.model.js';
+import { OtpLockoutModel } from '../../models/otp-lockout.model.js';
 import { UserModel, type IUserDocument } from '../../models/user.model.js';
 import { getConfig } from '../../config/env.js';
 import { normalizePhoneNumber } from '../phone.utils.js';
@@ -95,17 +96,40 @@ export class OtpService {
 
     const now = new Date();
 
-    // 2. Check Cooldown on Existing Active OTP Challenge
-    const existingOtp = await PhoneOtpModel.findOne({
+    // 2. Check Temporary Phone Lockout (SEC-5A1-04: 15-minute freeze after repeated verification failures)
+    const lockout = await OtpLockoutModel.findOne({ phone, userType });
+    if (lockout) {
+      if (lockout.isLocked(now)) {
+        const remainingSecs = Math.max(
+          1,
+          Math.ceil((lockout.lockedUntil!.getTime() - now.getTime()) / 1000),
+        );
+        throw new OtpError(
+          `Account temporarily locked due to repeated failed attempts. Please try again after ${remainingSecs} seconds`,
+          'ACCOUNT_LOCKED',
+          429,
+          { lockoutRemainingSeconds: remainingSecs },
+        );
+      }
+      // If lockout duration has elapsed or failure window expired (>15 min), reset lockout tracking
+      if (
+        (lockout.lockedUntil && now.getTime() >= lockout.lockedUntil.getTime()) ||
+        now.getTime() - lockout.lastFailedAt.getTime() > 15 * 60 * 1000
+      ) {
+        await OtpLockoutModel.deleteOne({ _id: lockout._id });
+      }
+    }
+
+    // 3. Check Cooldown on Most Recent OTP Challenge (Consumed or Unconsumed, SEC-5A1-04 remediation)
+    const latestOtp = await PhoneOtpModel.findOne({
       phone,
       userType,
-      isConsumed: false,
     }).sort({ createdAt: -1 });
 
-    if (existingOtp && existingOtp.isCooldownActive(now)) {
+    if (latestOtp && latestOtp.isCooldownActive(now)) {
       const remainingSecs = Math.max(
         1,
-        Math.ceil((existingOtp.cooldownUntil.getTime() - now.getTime()) / 1000),
+        Math.ceil((latestOtp.cooldownUntil.getTime() - now.getTime()) / 1000),
       );
       throw new OtpError(
         `Please wait ${remainingSecs} seconds before requesting a new OTP`,
@@ -184,6 +208,30 @@ export class OtpService {
     const cleanOtp = rawOtp.trim();
     const now = new Date();
 
+    // 0. Check Temporary Phone Lockout (SEC-5A1-04: 15-minute freeze after repeated verification failures)
+    const lockout = await OtpLockoutModel.findOne({ phone, userType });
+    if (lockout) {
+      if (lockout.isLocked(now)) {
+        const remainingSecs = Math.max(
+          1,
+          Math.ceil((lockout.lockedUntil!.getTime() - now.getTime()) / 1000),
+        );
+        throw new OtpError(
+          `Account temporarily locked due to repeated failed attempts. Please try again after ${remainingSecs} seconds`,
+          'ACCOUNT_LOCKED',
+          429,
+          { lockoutRemainingSeconds: remainingSecs },
+        );
+      }
+      // If lockout duration has elapsed or failure window expired (>15 min), reset lockout tracking
+      if (
+        (lockout.lockedUntil && now.getTime() >= lockout.lockedUntil.getTime()) ||
+        now.getTime() - lockout.lastFailedAt.getTime() > 15 * 60 * 1000
+      ) {
+        await OtpLockoutModel.deleteOne({ _id: lockout._id });
+      }
+    }
+
     // 1. Locate the latest unconsumed challenge for this identity
     const otpDoc = await PhoneOtpModel.findOne({
       phone,
@@ -220,7 +268,35 @@ export class OtpService {
     const isMatch = timingSafeEqualHex(candidateHash, otpDoc.hashedOtp);
 
     if (!isMatch) {
-      // Increment attempt counter atomically
+      // Track cumulative failed attempts across challenges (SEC-5A1-04)
+      const updatedLockout = await OtpLockoutModel.findOneAndUpdate(
+        { phone, userType },
+        {
+          $inc: { failedAttempts: 1 },
+          $set: { lastFailedAt: now },
+          $setOnInsert: { createdAt: now },
+        },
+        { upsert: true, new: true },
+      );
+
+      if (updatedLockout && updatedLockout.failedAttempts >= 5) {
+        const lockoutDurationMs = 15 * 60 * 1000; // 15-minute freeze
+        const lockedUntil = new Date(now.getTime() + lockoutDurationMs);
+        await OtpLockoutModel.updateOne(
+          { _id: updatedLockout._id },
+          { $set: { lockedUntil } },
+        );
+        // Burn active OTP challenge
+        await PhoneOtpModel.updateOne({ _id: otpDoc._id }, { $set: { isConsumed: true } });
+        throw new OtpError(
+          'Account temporarily locked due to repeated failed attempts. Please try again after 900 seconds',
+          'ACCOUNT_LOCKED',
+          429,
+          { lockoutRemainingSeconds: 900 },
+        );
+      }
+
+      // Increment attempt counter atomically on the active challenge
       const updated = await PhoneOtpModel.findOneAndUpdate(
         { _id: otpDoc._id },
         { $inc: { attempts: 1 } },
@@ -301,6 +377,9 @@ export class OtpService {
     // Update lastLoginAt
     user.lastLoginAt = new Date();
     await user.save();
+
+    // Reset failed verification lockout record on successful authentication
+    await OtpLockoutModel.deleteOne({ phone, userType });
 
     return { user };
   }

@@ -8,6 +8,7 @@ import { connectDatabase, disconnectDatabase } from '../src/database/database.js
 import { UserModel, type IUserDocument } from '../src/models/user.model.js';
 import { RoleModel } from '../src/models/role.model.js';
 import { PhoneOtpModel } from '../src/models/phone-otp.model.js';
+import { OtpLockoutModel } from '../src/models/otp-lockout.model.js';
 import { RefreshTokenModel } from '../src/models/refresh-token.model.js';
 import { MockOtpProvider } from '../src/services/otp/mock-otp.provider.js';
 import { TokenService } from '../src/services/token/token.service.js';
@@ -48,6 +49,7 @@ describe('Auth Routes & Controllers — Step 6 Endpoints & Contracts', () => {
       // Clean up previous test artifacts
       await UserModel.deleteMany({ phone: { $regex: /^\+9195555/ } });
       await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+9195555/ } });
+      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+9195555/ } });
       await RoleModel.deleteMany({ code: 'AUTH_CTRL_ADMIN' });
 
       // Create isolated test role with RBAC_MANAGE permission
@@ -90,6 +92,7 @@ describe('Auth Routes & Controllers — Step 6 Endpoints & Contracts', () => {
     if (isDbConnected) {
       await UserModel.deleteMany({ phone: { $regex: /^\+9195555/ } });
       await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+9195555/ } });
+      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+9195555/ } });
       await RoleModel.deleteMany({ code: 'AUTH_CTRL_ADMIN' });
       await RefreshTokenModel.deleteMany({
         userId: { $in: [preProvisionedPartner?._id, preProvisionedStaff?._id] },

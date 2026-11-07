@@ -33,7 +33,7 @@ export interface IOtpVerifyInput {
  */
 export interface IAuthTokens {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
   expiresIn: number;
   tokenType: 'Bearer';
 }

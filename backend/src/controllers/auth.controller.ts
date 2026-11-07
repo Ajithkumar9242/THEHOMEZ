@@ -24,6 +24,13 @@ import type {
   LogoutDto,
 } from '../routes/auth.schemas.js';
 
+import {
+  REFRESH_COOKIE_NAME,
+  setRefreshTokenCookie,
+  clearRefreshTokenCookie,
+  isBrowserClient,
+} from '../services/token/cookie.utils.js';
+
 export class AuthController {
   private readonly otpService: OtpService;
   private readonly tokenService: TokenService;
@@ -97,6 +104,7 @@ export class AuthController {
   /**
    * POST /api/v1/auth/otp/verify
    * Verifies an OTP challenge, provisions CUSTOMER identity if new, and issues token pair.
+   * Sets HTTP-only secure cookie and suppresses refresh token from browser-facing JSON bodies.
    */
   public verifyOtp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -114,12 +122,24 @@ export class AuthController {
       };
       const tokens = await this.tokenService.generateTokenPair(user, context);
 
+      // Issue HTTP-only secure cookie for refresh token
+      setRefreshTokenCookie(res, tokens.refreshToken);
+
       const authUser = this.formatAuthUser(user, permissions);
+
+      // For browser clients, omit refreshToken from JSON response body to prevent JavaScript XSS exposure
+      const responseTokens: IAuthResponse['tokens'] = isBrowserClient(req)
+        ? {
+            accessToken: tokens.accessToken,
+            expiresIn: tokens.expiresIn,
+            tokenType: tokens.tokenType,
+          }
+        : tokens;
 
       const response: IApiResponse<IAuthResponse> = {
         success: true,
         data: {
-          tokens,
+          tokens: responseTokens,
           user: authUser,
         },
       };
@@ -147,10 +167,45 @@ export class AuthController {
   /**
    * POST /api/v1/auth/refresh
    * Rotates an opaque refresh token atomically with automatic reuse detection.
+   * Reads token from HTTP-only cookie or request body (for non-browser backward compatibility).
    */
   public refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { refreshToken } = req.body as RefreshTokenDto;
+      const cookieToken = req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined;
+      const bodyToken = (req.body as RefreshTokenDto)?.refreshToken;
+      const refreshToken = cookieToken || bodyToken;
+
+      if (!refreshToken || typeof refreshToken !== 'string') {
+        const errorResponse: IApiErrorResponse = {
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Refresh token is required in cookie or request body',
+            correlationId: req.correlationId,
+            timestamp: new Date().toISOString(),
+            details: [{ field: 'refreshToken', message: 'Refresh token is required' }],
+          },
+        };
+        res.status(400).json(errorResponse);
+        return;
+      }
+
+      // Validate format
+      const parts = refreshToken.split('.');
+      if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        const errorResponse: IApiErrorResponse = {
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Malformed refresh token format',
+            correlationId: req.correlationId,
+            timestamp: new Date().toISOString(),
+            details: [{ field: 'refreshToken', message: 'Malformed refresh token format' }],
+          },
+        };
+        res.status(400).json(errorResponse);
+        return;
+      }
 
       const context = {
         userAgent: req.headers['user-agent'],
@@ -159,10 +214,23 @@ export class AuthController {
 
       const tokens = await this.tokenService.rotateRefreshToken(refreshToken, context);
 
+      // Rotate HTTP-only cookie with the new token
+      setRefreshTokenCookie(res, tokens.refreshToken);
+
+      // For cookie-based / browser requests without body tokens, do not expose refreshToken in JSON body
+      const browserMode = Boolean(cookieToken && !bodyToken) || isBrowserClient(req);
+      const responseTokens: IRefreshTokenResponse['tokens'] = browserMode && !bodyToken
+        ? {
+            accessToken: tokens.accessToken,
+            expiresIn: tokens.expiresIn,
+            tokenType: tokens.tokenType,
+          }
+        : tokens;
+
       const response: IApiResponse<IRefreshTokenResponse> = {
         success: true,
         data: {
-          tokens,
+          tokens: responseTokens,
         },
       };
 
@@ -187,20 +255,77 @@ export class AuthController {
 
   /**
    * POST /api/v1/auth/logout
-   * Safely revokes the active refresh token session.
+   * Safely revokes the active refresh token session and clears the HTTP-only cookie.
    */
   public logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { refreshToken } = (req.body || {}) as LogoutDto;
+      const cookieToken = req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined;
+      const bodyToken = (req.body as LogoutDto)?.refreshToken;
+      const refreshToken = cookieToken || bodyToken;
 
-      if (refreshToken) {
+      if (refreshToken && typeof refreshToken === 'string') {
         await this.tokenService.revokeRefreshToken(refreshToken);
+      } else if (req.user?.id) {
+        await this.tokenService.revokeAllUserSessions(req.user.id);
+      } else {
+        const errorResponse: IApiErrorResponse = {
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Refresh token is required to log out',
+            correlationId: req.correlationId,
+            timestamp: new Date().toISOString(),
+            details: [{ field: 'refreshToken', message: 'Refresh token is required in cookie or body' }],
+          },
+        };
+        res.status(400).json(errorResponse);
+        return;
       }
+
+      // Clear the HTTP-only cookie
+      clearRefreshTokenCookie(res);
 
       const response: IApiResponse<ILogoutResponse> = {
         success: true,
         data: {
           message: 'Successfully logged out',
+        },
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * POST /api/v1/auth/logout-all
+   * Revokes all active sessions for the authenticated user and clears browser cookie.
+   */
+  public logoutAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const principal = req.user;
+      if (!principal) {
+        const errorResponse: IApiErrorResponse = {
+          success: false,
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Authentication token is required',
+            correlationId: req.correlationId,
+            timestamp: new Date().toISOString(),
+          },
+        };
+        res.status(401).json(errorResponse);
+        return;
+      }
+
+      await this.tokenService.revokeAllUserSessions(principal.id);
+      clearRefreshTokenCookie(res);
+
+      const response: IApiResponse<ILogoutResponse> = {
+        success: true,
+        data: {
+          message: 'Successfully logged out from all devices',
         },
       };
 

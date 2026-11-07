@@ -91,11 +91,12 @@ export type OtpVerifyDto = z.infer<typeof otpVerifySchema>;
 
 /**
  * Schema for POST /api/v1/auth/refresh
+ * Accepts refreshToken in request body for API clients, or empty body when supplied via HTTP-only cookie.
  */
 export const refreshTokenSchema = z
   .object({
     refreshToken: z
-      .string({ message: 'Refresh token is required' })
+      .string()
       .trim()
       .min(1, 'Refresh token cannot be empty')
       .max(512, 'Refresh token cannot exceed 512 characters')
@@ -107,7 +108,8 @@ export const refreshTokenSchema = z
         {
           message: 'Malformed refresh token format',
         },
-      ),
+      )
+      .optional(),
   })
   .strict();
 

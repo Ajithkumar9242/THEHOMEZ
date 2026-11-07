@@ -73,6 +73,28 @@ export function createAuthRateLimiter(overrideOptions?: Partial<Options>) {
 }
 
 /**
+ * Global IP-Level Rate Limiter for OTP Requests (SEC-5A1-03 remediation).
+ * Prevents SMS gateway exhaustion and telephony toll fraud across distributed phone numbers
+ * originating from a single IP address.
+ */
+export function createOtpIpRateLimiter(overrideOptions?: Partial<Options>) {
+  const config = getConfig();
+
+  return rateLimit({
+    windowMs: config.auth.rateLimit.windowMs,
+    limit: config.auth.rateLimit.otpIpMaxRequests,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req: Request) => {
+      const rawIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
+      return ipKeyGenerator(rawIp);
+    },
+    handler: rateLimitErrorHandler,
+    ...overrideOptions,
+  });
+}
+
+/**
  * Rate Limiter for General Protected API Operations
  */
 export function createApiRateLimiter(overrideOptions?: Partial<Options>) {

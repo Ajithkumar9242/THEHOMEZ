@@ -124,6 +124,12 @@ const rawEnvSchema = z
       .int()
       .min(1, { message: 'AUTH_RATE_LIMIT_MAX_REQUESTS must be >= 1' })
       .default(10),
+    OTP_IP_RATE_LIMIT_MAX_REQUESTS: z.coerce
+      .number()
+      .int()
+      .min(1, { message: 'OTP_IP_RATE_LIMIT_MAX_REQUESTS must be >= 1' })
+      .default(25),
+    TRUST_PROXY: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     // In production, MONGODB_URI and CORS_ORIGIN are mandatory
@@ -226,6 +232,7 @@ export interface AppConfig {
   port: number;
   apiPrefix: string;
   corsOrigins: string[];
+  trustProxy: boolean | number | string;
   mongodb: {
     uri: string;
     minPoolSize: number;
@@ -260,9 +267,12 @@ export interface AppConfig {
       windowMs: number;
       maxRequests: number;
       authMaxRequests: number;
+      otpIpMaxRequests: number;
     };
   };
 }
+
+export type IAppConfig = AppConfig;
 
 /**
  * Validates and transforms an environment record into a strongly-typed AppConfig.
@@ -319,6 +329,17 @@ export function validateConfig(rawEnv: Record<string, unknown> = process.env): A
       ? data.OTP_PEPPER_SECRET.trim()
       : defaultDevOtpPepperSecret;
 
+  const trustProxy = (() => {
+    if (data.TRUST_PROXY !== undefined) {
+      if (data.TRUST_PROXY === 'true') return true;
+      if (data.TRUST_PROXY === 'false') return false;
+      const num = Number(data.TRUST_PROXY);
+      if (!Number.isNaN(num)) return num;
+      return data.TRUST_PROXY;
+    }
+    return data.NODE_ENV === 'production' ? 1 : false;
+  })();
+
   return {
     nodeEnv: data.NODE_ENV,
     isProduction: data.NODE_ENV === 'production',
@@ -327,6 +348,7 @@ export function validateConfig(rawEnv: Record<string, unknown> = process.env): A
     port: data.PORT,
     apiPrefix: data.API_PREFIX,
     corsOrigins: parsedCorsOrigins,
+    trustProxy,
     mongodb: {
       uri: mongoUri,
       minPoolSize: data.MONGODB_MIN_POOL_SIZE,
@@ -365,6 +387,7 @@ export function validateConfig(rawEnv: Record<string, unknown> = process.env): A
         windowMs: data.RATE_LIMIT_WINDOW_MS,
         maxRequests: data.RATE_LIMIT_MAX_REQUESTS,
         authMaxRequests: data.AUTH_RATE_LIMIT_MAX_REQUESTS,
+        otpIpMaxRequests: data.OTP_IP_RATE_LIMIT_MAX_REQUESTS,
       },
     },
   };

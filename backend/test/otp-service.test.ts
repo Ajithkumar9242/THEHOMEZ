@@ -4,6 +4,7 @@ import { UserType, UserStatus } from '@thehomez/shared-types';
 import { connectDatabase, disconnectDatabase } from '../src/database/database.js';
 import { UserModel } from '../src/models/user.model.js';
 import { PhoneOtpModel } from '../src/models/phone-otp.model.js';
+import { OtpLockoutModel } from '../src/models/otp-lockout.model.js';
 import { OtpService, OtpError } from '../src/services/otp/otp.service.js';
 import { MockOtpProvider } from '../src/services/otp/mock-otp.provider.js';
 
@@ -18,6 +19,13 @@ describe('OtpService — Authentication Challenge Lifecycle', () => {
     } catch {
       isDbConnected = false;
     }
+
+    if (isDbConnected) {
+      await UserModel.deleteMany({ phone: { $regex: /^\+919999/ } });
+      await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+919999/ } });
+      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+919999/ } });
+    }
+
     otpService = new OtpService(new MockOtpProvider());
   });
 
@@ -29,6 +37,7 @@ describe('OtpService — Authentication Challenge Lifecycle', () => {
     if (isDbConnected) {
       await UserModel.deleteMany({ phone: { $regex: /^\+919999/ } });
       await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+919999/ } });
+      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+919999/ } });
       await disconnectDatabase();
     }
   });

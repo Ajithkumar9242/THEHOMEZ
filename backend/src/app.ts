@@ -1,6 +1,7 @@
 import express, { type Application } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { getConfig } from './config/env.js';
 import { correlationIdMiddleware } from './middleware/correlation-id.js';
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
@@ -26,19 +27,34 @@ export function createApp(): Application {
   const config = getConfig();
   const app: Application = express();
 
+  // Proxy-aware IP handling based on deployment topology
+  if (config.trustProxy !== false) {
+    app.set('trust proxy', config.trustProxy);
+  }
+
   // Basic security headers
   app.use(helmet());
 
-  // Cross-Origin Resource Sharing
+  // Cross-Origin Resource Sharing with credentials and custom session headers
   app.use(
     cors({
       origin: config.corsOrigins.length > 0 ? config.corsOrigins : false,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-Id', 'X-Request-Id'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Correlation-Id',
+        'X-Request-Id',
+        'X-Cart-Session-Token',
+        'X-Auth-Transport',
+      ],
       exposedHeaders: ['X-Correlation-Id'],
     }),
   );
+
+  // Cookie parser middleware for HTTP-only refresh tokens
+  app.use(cookieParser());
 
   // Body parsers with defensive size limits
   app.use(express.json({ limit: '1mb' }));

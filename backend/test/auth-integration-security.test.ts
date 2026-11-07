@@ -16,6 +16,7 @@ import { connectDatabase, disconnectDatabase } from '../src/database/database.js
 import { UserModel, type IUserDocument } from '../src/models/user.model.js';
 import { RoleModel } from '../src/models/role.model.js';
 import { PhoneOtpModel } from '../src/models/phone-otp.model.js';
+import { OtpLockoutModel } from '../src/models/otp-lockout.model.js';
 import { RefreshTokenModel } from '../src/models/refresh-token.model.js';
 import { MockOtpProvider } from '../src/services/otp/mock-otp.provider.js';
 import { TokenService } from '../src/services/token/token.service.js';
@@ -73,6 +74,7 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
       // 1. Clean test-prefixed collections
       await UserModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
       await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
+      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
       await RoleModel.deleteMany({ code: { $in: ['SEC_TEST_ADMIN', 'SEC_TEST_STAFF_PLAIN'] } });
       await TestPartnerOrderModel.deleteMany({});
 
@@ -185,6 +187,7 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
     if (isDbConnected) {
       await UserModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
       await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
+      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
       await RoleModel.deleteMany({ code: { $in: ['SEC_TEST_ADMIN', 'SEC_TEST_STAFF_PLAIN'] } });
       await RefreshTokenModel.deleteMany({
         userId: {

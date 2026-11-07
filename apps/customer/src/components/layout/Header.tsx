@@ -60,6 +60,21 @@ export const Header: React.FC = () => {
 
   return (
     <header className="thz-header" role="banner">
+      {/* Top Announcement Utility Bar */}
+      <div className="thz-top-announcement">
+        <div className="thz-top-announcement-inner">
+          <div className="thz-top-badge">
+            <span className="thz-top-tag">Hub Dispatch</span>
+            <span>Hyperlocal Trade Materials Delivery Across Bengaluru</span>
+          </div>
+          <div className="thz-top-links">
+            <span className="thz-top-link-item">🏗️ Verified Batch Compliance</span>
+            <span className="thz-top-link-item">⚖️ Weighbridge Guaranteed</span>
+            <span className="thz-top-link-item">📜 Mill Test Certificates (MTC)</span>
+          </div>
+        </div>
+      </div>
+
       <div className="thz-header-content">
         {/* Brand Logo */}
         <button
@@ -68,6 +83,21 @@ export const Header: React.FC = () => {
           onClick={navigateToHome}
           aria-label="TheHomez Home"
         >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            style={{ marginRight: '2px' }}
+          >
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
           <span>TheHomez</span>
           <span className="thz-logo-badge">COMMERCIAL</span>
         </button>
