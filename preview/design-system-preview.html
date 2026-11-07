@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TheHomez — Design System & Visual Token Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../src/styles/tokens.css">
+  <style>
+    /* Reset & Base Preview Styles consuming tokens.css */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--thz-font-sans);
+      background-color: var(--thz-bg-app);
+      color: var(--thz-text-primary);
+      line-height: var(--thz-leading-normal);
+      padding: var(--thz-space-6) var(--thz-space-8);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: var(--thz-space-6);
+      margin-bottom: var(--thz-space-8);
+      border-bottom: 1px solid var(--thz-border-subtle);
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: var(--thz-space-3);
+    }
+
+    .brand-mark {
+      width: 40px;
+      height: 40px;
+      background: var(--thz-color-primary-700);
+      color: white;
+      border-radius: var(--thz-radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: var(--thz-font-bold);
+      font-size: var(--thz-text-xl);
+      letter-spacing: -0.05em;
+    }
+
+    .brand-title {
+      font-size: var(--thz-text-2xl);
+      font-weight: var(--thz-font-bold);
+      color: var(--thz-color-primary-700);
+      letter-spacing: -0.03em;
+    }
+
+    .brand-subtitle {
+      font-size: var(--thz-text-xs);
+      color: var(--thz-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .version-tag {
+      background: var(--thz-color-secondary-100);
+      color: var(--thz-color-secondary-800);
+      font-size: var(--thz-text-xs);
+      font-weight: var(--thz-font-semibold);
+      padding: var(--thz-space-1) var(--thz-space-3);
+      border-radius: var(--thz-radius-full);
+      border: 1px solid var(--thz-color-secondary-200);
+    }
+
+    .section-title {
+      font-size: var(--thz-text-xl);
+      font-weight: var(--thz-font-semibold);
+      color: var(--thz-text-primary);
+      margin-bottom: var(--thz-space-4);
+      display: flex;
+      align-items: center;
+      gap: var(--thz-space-2);
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: var(--thz-space-6);
+      margin-bottom: var(--thz-space-10);
+    }
+
+    .preview-card {
+      background: var(--thz-bg-surface);
+      border: 1px solid var(--thz-border-subtle);
+      border-radius: var(--thz-radius-lg);
+      padding: var(--thz-space-6);
+      box-shadow: var(--thz-shadow-xs);
+    }
+
+    .preview-card h3 {
+      font-size: var(--thz-text-base);
+      font-weight: var(--thz-font-semibold);
+      margin-bottom: var(--thz-space-4);
+      color: var(--thz-text-primary);
+      border-bottom: 1px solid var(--thz-border-subtle);
+      padding-bottom: var(--thz-space-2);
+    }
+
+    /* Palette Swatches */
+    .swatch-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--thz-space-2);
+    }
+
+    .swatch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--thz-space-2) var(--thz-space-3);
+      border-radius: var(--thz-radius-md);
+      font-size: var(--thz-text-xs);
+      font-weight: var(--thz-font-medium);
+    }
+
+    .swatch-chip {
+      width: 24px;
+      height: 24px;
+      border-radius: var(--thz-radius-sm);
+      border: 1px solid rgba(0,0,0,0.1);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--thz-space-2);
+      font-family: inherit;
+      font-weight: var(--thz-font-medium);
+      font-size: var(--thz-text-sm);
+      height: 40px;
+      padding: 0 var(--thz-space-4);
+      border-radius: var(--thz-radius-md);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all var(--thz-transition-fast);
+      text-decoration: none;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background: var(--thz-color-primary-700);
+      color: var(--thz-text-inverse);
+    }
+    .btn-primary:hover {
+      background: var(--thz-color-primary-800);
+    }
+
+    .btn-secondary {
+      background: var(--thz-color-secondary-800);
+      color: var(--thz-text-inverse);
+    }
+    .btn-secondary:hover {
+      background: var(--thz-color-secondary-900);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border-color: var(--thz-border-default);
+      color: var(--thz-text-primary);
+    }
+    .btn-outline:hover {
+      background: var(--thz-bg-hover);
+    }
+
+    .btn-destructive {
+      background: var(--thz-color-error-600);
+      color: var(--thz-text-inverse);
+    }
+    .btn-destructive:hover {
+      background: var(--thz-color-error-700);
+    }
+
+    .btn-disabled {
+      background: var(--thz-color-neutral-200);
+      color: var(--thz-color-neutral-400);
+      cursor: not-allowed;
+    }
+
+    /* Form Fields */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--thz-space-1);
+      margin-bottom: var(--thz-space-4);
+    }
+
+    .form-label {
+      font-size: var(--thz-text-sm);
+      font-weight: var(--thz-font-medium);
+      color: var(--thz-text-secondary);
+    }
+
+    .form-input {
+      font-family: inherit;
+      height: 40px;
+      padding: 0 var(--thz-space-3);
+      border: 1px solid var(--thz-border-default);
+      border-radius: var(--thz-radius-md);
+      font-size: var(--thz-text-sm);
+      background: var(--thz-bg-surface);
+      color: var(--thz-text-primary);
+      transition: border-color var(--thz-transition-fast);
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--thz-color-primary-700);
+    }
+
+    .form-input.has-error {
+      border-color: var(--thz-color-error-600);
+    }
+
+    .form-error {
+      font-size: var(--thz-text-xs);
+      color: var(--thz-color-error-600);
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--thz-space-1);
+      font-size: var(--thz-text-xs);
+      font-weight: var(--thz-font-medium);
+      padding: 2px 8px;
+      border-radius: var(--thz-radius-sm);
+      border: 1px solid transparent;
+    }
+
+    .badge-success {
+      background: var(--thz-color-success-50);
+      color: var(--thz-color-success-700);
+      border-color: var(--thz-color-success-border);
+    }
+
+    .badge-warning {
+      background: var(--thz-color-warning-50);
+      color: var(--thz-color-warning-700);
+      border-color: var(--thz-color-warning-border);
+    }
+
+    .badge-error {
+      background: var(--thz-color-error-50);
+      color: var(--thz-color-error-600);
+      border-color: var(--thz-color-error-border);
+    }
+
+    .badge-info {
+      background: var(--thz-color-info-50);
+      color: var(--thz-color-info-600);
+      border-color: var(--thz-color-info-border);
+    }
+
+    .badge-b2b {
+      background: var(--thz-color-secondary-100);
+      color: var(--thz-color-secondary-800);
+      border-color: var(--thz-color-secondary-300);
+    }
+
+    /* Product Card */
+    .product-card {
+      border: 1px solid var(--thz-border-subtle);
+      border-radius: var(--thz-radius-lg);
+      background: var(--thz-bg-surface);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: all var(--thz-transition-normal);
+    }
+
+    .product-card:hover {
+      box-shadow: var(--thz-shadow-md);
+      transform: translateY(-2px);
+    }
+
+    .product-media {
+      height: 140px;
+      background: var(--thz-color-neutral-100);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--thz-text-muted);
+      font-size: var(--thz-text-sm);
+    }
+
+    .product-body {
+      padding: var(--thz-space-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--thz-space-2);
+    }
+
+    .product-brand {
+      font-size: var(--thz-text-xs);
+      font-weight: var(--thz-font-semibold);
+      color: var(--thz-color-primary-700);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .product-title {
+      font-size: var(--thz-text-sm);
+      font-weight: var(--thz-font-semibold);
+      color: var(--thz-text-primary);
+      line-height: var(--thz-leading-snug);
+    }
+
+    .product-pricing {
+      display: flex;
+      align-items: baseline;
+      gap: var(--thz-space-2);
+      margin-top: var(--thz-space-1);
+    }
+
+    .price-main {
+      font-size: var(--thz-text-lg);
+      font-weight: var(--thz-font-bold);
+      color: var(--thz-text-primary);
+    }
+
+    .price-unit {
+      font-size: var(--thz-text-xs);
+      color: var(--thz-text-secondary);
+    }
+
+    /* Data Table */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--thz-text-sm);
+    }
+
+    .data-table th {
+      background: var(--thz-bg-subtle);
+      color: var(--thz-text-secondary);
+      font-weight: var(--thz-font-semibold);
+      text-align: left;
+      padding: var(--thz-space-3);
+      border-bottom: 1px solid var(--thz-border-subtle);
+      font-size: var(--thz-text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .data-table td {
+      padding: var(--thz-space-3);
+      border-bottom: 1px solid var(--thz-border-subtle);
+      color: var(--thz-text-primary);
+    }
+
+    .data-table tr:hover td {
+      background: var(--thz-bg-hover);
+    }
+
+    .data-table .text-mono {
+      font-family: var(--thz-font-mono);
+      font-size: var(--thz-text-xs);
+    }
+
+    .data-table .text-right {
+      text-align: right;
+    }
+
+    /* Modal Simulation */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--thz-bg-overlay);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-box {
+      background: var(--thz-bg-surface);
+      border-radius: var(--thz-radius-lg);
+      width: 100%;
+      max-width: 480px;
+      padding: var(--thz-space-6);
+      box-shadow: var(--thz-shadow-xl);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="preview-header">
+    <div class="brand-logo">
+      <div class="brand-mark">H</div>
+      <div>
+        <h1 class="brand-title">THEHOMEZ</h1>
+        <p class="brand-subtitle">Hyperlocal Multi-Vendor Platform • Design System Preview</p>
+      </div>
+    </div>
+    <div>
+      <span class="version-tag">Tokens v1.0 • Inter & Monospace</span>
+    </div>
+  </header>
+
+  <!-- Section 1: Color Palette Tokens -->
+  <h2 class="section-title">1. Color Palette Tokens</h2>
+  <div class="preview-grid">
+    <!-- Primary Terracotta Swatches -->
+    <div class="preview-card">
+      <h3>Primary Brand (Terracotta Brick)</h3>
+      <div class="swatch-group">
+        <div class="swatch-row" style="background: var(--thz-color-primary-50); color: var(--thz-color-primary-900);">
+          <span>Primary 50</span>
+          <span>#FDF4F4</span>
+        </div>
+        <div class="swatch-row" style="background: var(--thz-color-primary-100); color: var(--thz-color-primary-900);">
+          <span>Primary 100</span>
+          <span>#FCE7E7</span>
+        </div>
+        <div class="swatch-row" style="background: var(--thz-color-primary-700); color: white;">
+          <span>Primary 700 (Brand Base)</span>
+          <span>#8B2626</span>
+        </div>
+        <div class="swatch-row" style="background: var(--thz-color-primary-800); color: white;">
+          <span>Primary 800 (Hover)</span>
+          <span>#742222</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Secondary Slate Navy Swatches -->
+    <div class="preview-card">
+      <h3>Secondary (Industrial Slate Navy)</h3>
+      <div class="swatch-group">
+        <div class="swatch-row" style="background: var(--thz-color-secondary-100); color: var(--thz-color-secondary-900);">
+          <span>Secondary 100</span>
+          <span>#F1F5F9</span>
+        </div>
+        <div class="swatch-row" style="background: var(--thz-color-secondary-500); color: white;">
+          <span>Secondary 500</span>
+          <span>#64748B</span>
+        </div>
+        <div class="swatch-row" style="background: var(--thz-color-secondary-800); color: white;">
+          <span>Secondary 800 (Base)</span>
+          <span>#1E293B</span>
+        </div>
+        <div class="swatch-row" style="background: var(--thz-color-secondary-900); color: white;">
+          <span>Secondary 900 (Canvas)</span>
+          <span>#0F172A</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback Semantic Colors -->
+    <div class="preview-card">
+      <h3>Semantic & Status Tokens</h3>
+      <div class="swatch-group">
+        <div class="swatch-row" style="background: var(--thz-color-success-50); color: var(--thz-color-success-700); border: 1px solid var(--thz-color-success-border);">
+          <span>Success (Delivered / Paid)</span>
+          <span>#16A34A</span>
+        </div>
+        <div class="swatch-row" style="background: var(--thz-color-warning-50); color: var(--thz-color-warning-700); border: 1px solid var(--thz-color-warning-border);">
+          <span>Warning (Pending SLA)</span>
+          <span>#D97706</span>
+        </div>
+        <div class="swatch-row" style="background: var(--thz-color-error-50); color: var(--thz-color-error-700); border: 1px solid var(--thz-color-error-border);">
+          <span>Error (Cancelled / Failed)</span>
+          <span>#DC2626</span>
+        </div>
+        <div class="swatch-row" style="background: var(--thz-color-info-50); color: var(--thz-color-info-700); border: 1px solid var(--thz-color-info-border);">
+          <span>Info (Dispatched / En Route)</span>
+          <span>#2563EB</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Interactive Component Library -->
+  <h2 class="section-title">2. Core Component Library</h2>
+  <div class="preview-grid">
+    <!-- Buttons -->
+    <div class="preview-card">
+      <h3>Buttons & Actions</h3>
+      <div style="display: flex; flex-direction: column; gap: var(--thz-space-3);">
+        <button class="btn btn-primary">Primary Action (Terracotta)</button>
+        <button class="btn btn-secondary">Secondary Action (Slate)</button>
+        <button class="btn btn-outline">Outline Action</button>
+        <button class="btn btn-destructive">Destructive / Reject</button>
+        <button class="btn btn-disabled" disabled>Disabled State</button>
+      </div>
+    </div>
+
+    <!-- Form Controls -->
+    <div class="preview-card">
+      <h3>Form Inputs & Location</h3>
+      <div class="form-group">
+        <label class="form-label">Delivery PIN Code</label>
+        <input type="text" class="form-input" value="560037" placeholder="Enter 6-digit PIN code">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Unit Quantity (Metric Tonnes)</label>
+        <input type="number" class="form-input" value="2.5" step="0.05">
+      </div>
+      <div class="form-group">
+        <label class="form-label">GSTIN Identifier (Validation Error State)</label>
+        <input type="text" class="form-input has-error" value="29AAAAA0000A1Z">
+        <span class="form-error">Invalid GSTIN format (checksum mismatch)</span>
+      </div>
+    </div>
+
+    <!-- Status Badges -->
+    <div class="preview-card">
+      <h3>Fulfillment Status Badges</h3>
+      <div style="display: flex; flex-wrap: wrap; gap: var(--thz-space-2);">
+        <span class="badge badge-success">● Confirmed</span>
+        <span class="badge badge-info">● Preparing in Yard</span>
+        <span class="badge badge-info">● Dispatched</span>
+        <span class="badge badge-success">✔ Delivered</span>
+        <span class="badge badge-warning">⏱ Pending Assignment</span>
+        <span class="badge badge-error">✖ Partner Rejected</span>
+        <span class="badge badge-b2b">★ B2B Contractor Tier</span>
+      </div>
+      <div style="margin-top: var(--thz-space-6);">
+        <button class="btn btn-outline" style="width: 100%;" onclick="openModal()">Test Modal Dialog</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Domain Components (Product Card & Order Split Table) -->
+  <h2 class="section-title">3. Domain Specific Components</h2>
+  <div class="preview-grid" style="grid-template-columns: 300px 1fr;">
+    <!-- Product Card Sample -->
+    <div class="product-card">
+      <div class="product-media">
+        <span>[ Product Image / 50kg Bag ]</span>
+      </div>
+      <div class="product-body">
+        <span class="product-brand">UltraTech</span>
+        <h4 class="product-title">Super Cement OPC 53 Grade</h4>
+        <span class="badge badge-info" style="align-self: flex-start;">Quick Delivery (90m)</span>
+        <div class="product-pricing">
+          <span class="price-main">₹380.00</span>
+          <span class="price-unit">/ 50kg Bag</span>
+        </div>
+        <p style="font-size: var(--thz-text-xs); color: var(--thz-text-muted);">B2B Bulk Rate: ₹362 (>100 bags)</p>
+        <button class="btn btn-primary" style="margin-top: var(--thz-space-2); width: 100%;">Add to Cart</button>
+      </div>
+    </div>
+
+    <!-- Admin / Partner Order Table Sample -->
+    <div class="preview-card" style="overflow-x: auto;">
+      <h3>Multi-Vendor Sub-Order Dispatch Table (Dense)</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Sub-Order No.</th>
+            <th>Category & Partner</th>
+            <th>Items</th>
+            <th>Fulfilment Mode</th>
+            <th>Status</th>
+            <th class="text-right">Net Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-mono">THZ-2627-8921-F1</td>
+            <td><strong>Cement Yard</strong><br><span style="color: var(--thz-text-muted); font-size: 11px;">Apex Building Supplies</span></td>
+            <td>50 Bags (OPC 53)</td>
+            <td><span class="badge badge-b2b">Partner-Managed</span></td>
+            <td><span class="badge badge-info">Dispatched</span></td>
+            <td class="text-right text-mono">₹19,000.00</td>
+          </tr>
+          <tr>
+            <td class="text-mono">THZ-2627-8921-F2</td>
+            <td><strong>Electricals Hub</strong><br><span style="color: var(--thz-text-muted); font-size: 11px;">Metro Cables & Lighting</span></td>
+            <td>20 PVC Conduit (25mm)</td>
+            <td><span class="badge badge-b2b">Platform-Managed</span></td>
+            <td><span class="badge badge-warning">Preparing</span></td>
+            <td class="text-right text-mono">₹2,900.00</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Interactive Modal Dialog Simulation -->
+  <div id="demoModal" class="modal-backdrop">
+    <div class="modal-box">
+      <h3 style="font-size: var(--thz-text-lg); margin-bottom: var(--thz-space-2);">Confirm Order Assignment</h3>
+      <p style="font-size: var(--thz-text-sm); color: var(--thz-text-secondary); margin-bottom: var(--thz-space-4);">
+        You are accepting Sub-Order <strong>THZ-2627-8921-F1</strong> for 50 Bags of UltraTech Cement. Packing and dispatch SLA is 45 minutes.
+      </p>
+      <div style="display: flex; justify-content: flex-end; gap: var(--thz-space-2);">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="closeModal()">Accept Assignment</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function openModal() {
+      document.getElementById('demoModal').style.display = 'flex';
+    }
+    function closeModal() {
+      document.getElementById('demoModal').style.display = 'none';
+    }
+  </script>
+
+</body>
+</html>

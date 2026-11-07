@@ -1,0 +1,79 @@
+# ==============================================================================
+# TheHomez — Monorepo Git Ignore Rules
+# ==============================================================================
+
+# 1. Dependencies & Package Managers
+node_modules/
+*/node_modules/
+.pnp/
+.pnp.js
+
+# 2. Build Outputs & Compilations
+dist/
+*/dist/
+build/
+*/build/
+out/
+.next/
+*.tsbuildinfo
+
+# 3. Environment & Sensitive Credentials
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.cert
+*.crt
+# Explicitly retain documentation and safe templates:
+!.env.example
+!**/.env.example
+!.env.template
+!**/.env.template
+
+# 4. Logs, Debugging & Temporary Files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+tmp/
+temp/
+*.tmp
+*.bak
+
+# 5. Operating System Artifacts
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# 6. IDEs & Editors
+.idea/
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# 7. Test Coverage & Tool Caches
+coverage/
+.nyc_output/
+vitest-report/
+.eslintcache
+.prettiercache
+.vite/
+*/.vite/
+
+# 8. Local Runtime & Storage (anchored to prevent ignoring nested source/test fixtures)
+/data/
+/mongo_data/
+/uploads/
+backend/uploads/
+
+*/docs/
+docs/

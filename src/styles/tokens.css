@@ -1,0 +1,228 @@
+/**
+ * TheHomez Design System — Core Design Tokens
+ * 
+ * Target Applications:
+ * 1. Customer Web App (Tailwind CSS mapped to these variables)
+ * 2. Partner Dashboard (Ant Design mapped to these tokens)
+ * 3. Admin Dashboard (Ant Design mapped to these tokens)
+ * 
+ * Visual Direction: Minimalistic, premium, modern, clean, professional, responsive.
+ */
+
+:root {
+  /* ==========================================================================
+     1. COLOR PALETTE
+     ========================================================================== */
+
+  /* Primary Brand: Architectural Terracotta / Deep Brick Crimson
+     Inspired by brickwork, structural foundations, and the SRS masthead */
+  --thz-color-primary-50:  #fdf4f4;
+  --thz-color-primary-100: #fce7e7;
+  --thz-color-primary-200: #fad3d3;
+  --thz-color-primary-300: #f4b0b0;
+  --thz-color-primary-400: #ea7e7e;
+  --thz-color-primary-500: #db5050;
+  --thz-color-primary-600: #b93232;
+  --thz-color-primary-700: #8b2626; /* Primary Brand Base */
+  --thz-color-primary-800: #742222;
+  --thz-color-primary-900: #5f2020;
+  --thz-color-primary-950: #340c0c;
+
+  /* Secondary Accent: Industrial Slate Navy (Structure, Steel, Authority) */
+  --thz-color-secondary-50:  #f8fafc;
+  --thz-color-secondary-100: #f1f5f9;
+  --thz-color-secondary-200: #e2e8f0;
+  --thz-color-secondary-300: #cbd5e1;
+  --thz-color-secondary-400: #94a3b8;
+  --thz-color-secondary-500: #64748b;
+  --thz-color-secondary-600: #475569;
+  --thz-color-secondary-700: #334155;
+  --thz-color-secondary-800: #1e293b; /* Secondary Base */
+  --thz-color-secondary-900: #0f172a;
+  --thz-color-secondary-950: #020617;
+
+  /* Warm Accent: Architectural Brass / Ochre (Warm accents, ratings, highlights) */
+  --thz-color-accent-50:  #fffbeb;
+  --thz-color-accent-100: #fef3c7;
+  --thz-color-accent-500: #f59e0b;
+  --thz-color-accent-600: #d97706; /* Accent Base */
+  --thz-color-accent-700: #b45309;
+
+  /* Neutrals: Cool Industrial Grays */
+  --thz-color-neutral-0:   #ffffff;
+  --thz-color-neutral-50:  #f8fafc;
+  --thz-color-neutral-100: #f1f5f9;
+  --thz-color-neutral-200: #e2e8f0;
+  --thz-color-neutral-300: #cbd5e1;
+  --thz-color-neutral-400: #94a3b8;
+  --thz-color-neutral-500: #64748b;
+  --thz-color-neutral-600: #475569;
+  --thz-color-neutral-700: #334155;
+  --thz-color-neutral-800: #1e293b;
+  --thz-color-neutral-900: #0f172a;
+  --thz-color-neutral-950: #020617;
+
+  /* Semantic / Feedback Colors */
+  /* Success: Forest Emerald */
+  --thz-color-success-50:  #f0fdf4;
+  --thz-color-success-100: #dcfce7;
+  --thz-color-success-500: #22c55e;
+  --thz-color-success-600: #16a34a; /* Success Base */
+  --thz-color-success-700: #15803d; /* Text on light background: Passes WCAG AA (4.52:1) */
+  --thz-color-success-border: #bbf7d0;
+
+  /* Warning: Safety Amber */
+  --thz-color-warning-50:  #fffbeb;
+  --thz-color-warning-100: #fef3c7;
+  --thz-color-warning-500: #f59e0b;
+  --thz-color-warning-600: #d97706; /* Warning Base */
+  --thz-color-warning-700: #b45309; /* Text on light background: Passes WCAG AA (5.47:1) */
+  --thz-color-warning-border: #fde68a;
+
+  /* Error / Destructive: High-Visibility Crimson */
+  --thz-color-error-50:  #fef2f2;
+  --thz-color-error-100: #fee2e2;
+  --thz-color-error-500: #ef4444;
+  --thz-color-error-600: #dc2626; /* Error Base */
+  --thz-color-error-700: #b91c1c;
+  --thz-color-error-border: #fecaca;
+
+  /* Information / Process: Steel Blue */
+  --thz-color-info-50:  #eff6ff;
+  --thz-color-info-100: #dbeafe;
+  --thz-color-info-500: #3b82f6;
+  --thz-color-info-600: #2563eb; /* Info Base */
+  --thz-color-info-700: #1d4ed8;
+  --thz-color-info-border: #bfdbfe;
+
+  /* Background Contexts */
+  --thz-bg-app:        var(--thz-color-neutral-50);  /* Canvas background */
+  --thz-bg-surface:    var(--thz-color-neutral-0);   /* Cards, panels, modals */
+  --thz-bg-subtle:     var(--thz-color-neutral-100); /* Table headers, search wells */
+  --thz-bg-hover:      var(--thz-color-neutral-100);
+  --thz-bg-active:     var(--thz-color-neutral-200);
+  --thz-bg-sidebar:    var(--thz-color-neutral-0);   /* Light sidebar or #0f172a for dark */
+  --thz-bg-overlay:    rgba(15, 23, 42, 0.5);        /* Modal backdrop */
+
+  /* Text Hierarchy */
+  --thz-text-primary:     var(--thz-color-neutral-900); /* Headlines, titles, key numbers */
+  --thz-text-secondary:   var(--thz-color-neutral-600); /* Body text, descriptions */
+  --thz-text-muted:       var(--thz-color-neutral-400); /* Metadata, hints, timestamps */
+  --thz-text-disabled:    var(--thz-color-neutral-300);
+  --thz-text-inverse:     var(--thz-color-neutral-0);   /* Text on dark/primary buttons */
+  --thz-text-brand:       var(--thz-color-primary-700);
+
+  /* Borders & Dividers */
+  --thz-border-subtle:    var(--thz-color-neutral-200); /* Card borders, dividers */
+  --thz-border-default:   var(--thz-color-neutral-300); /* Input outlines, structural lines */
+  --thz-border-strong:    var(--thz-color-neutral-400);
+  --thz-border-focus:     var(--thz-color-primary-700); /* Focus rings */
+
+
+  /* ==========================================================================
+     2. TYPOGRAPHY
+     ========================================================================== */
+
+  --thz-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --thz-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+
+  /* Font Weights */
+  --thz-font-regular: 400;
+  --thz-font-medium:  500;
+  --thz-font-semibold: 600;
+  --thz-font-bold:    700;
+
+  /* Font Size Scale (Mobile to Desktop) */
+  --thz-text-xs:   0.75rem;   /* 12px - Captions, tags, sub-order badges */
+  --thz-text-sm:   0.875rem;  /* 14px - Table body, dense forms, secondary UI */
+  --thz-text-base: 1rem;      /* 16px - Primary body, standard form inputs */
+  --thz-text-lg:   1.125rem;  /* 18px - Sub-headings, card titles */
+  --thz-text-xl:   1.25rem;   /* 20px - Section headings, modal titles */
+  --thz-text-2xl:  1.5rem;    /* 24px - Page titles, KPI numbers */
+  --thz-text-3xl:  1.875rem;  /* 30px - Major feature headings */
+  --thz-text-4xl:  2.25rem;   /* 36px - Display headlines */
+
+  /* Line Heights */
+  --thz-leading-tight:  1.25;
+  --thz-leading-snug:   1.375;
+  --thz-leading-normal: 1.5;
+  --thz-leading-relaxed: 1.625;
+
+
+  /* ==========================================================================
+     3. SPACING & SIZING (4px Base Grid)
+     ========================================================================== */
+
+  --thz-space-0:   0px;
+  --thz-space-1:   0.25rem;  /* 4px */
+  --thz-space-2:   0.5rem;   /* 8px */
+  --thz-space-3:   0.75rem;  /* 12px */
+  --thz-space-4:   1rem;     /* 16px */
+  --thz-space-5:   1.25rem;  /* 20px */
+  --thz-space-6:   1.5rem;   /* 24px */
+  --thz-space-8:   2rem;     /* 32px */
+  --thz-space-10:  2.5rem;   /* 40px */
+  --thz-space-12:  3rem;     /* 48px */
+  --thz-space-16:  4rem;     /* 64px */
+  --thz-space-20:  5rem;     /* 80px */
+
+  /* Layout Boundaries */
+  --thz-container-max:     1280px; /* Standard wide container */
+  --thz-container-narrow:  1024px; /* Checkout & Account viewports */
+  --thz-sidebar-width:     260px;  /* Admin / Partner dashboard sidebar */
+  --thz-sidebar-collapsed: 72px;
+  --thz-header-height:     64px;   /* Top navigation bar height */
+  --thz-mobile-nav-height: 60px;   /* Customer app bottom navigation bar */
+
+
+  /* ==========================================================================
+     4. BORDER RADII (Restrained & Architectural)
+     ========================================================================== */
+
+  --thz-radius-none: 0px;
+  --thz-radius-sm:   3px;    /* Chips, badges, small tags */
+  --thz-radius-md:   6px;    /* Inputs, standard buttons, dropdown menus */
+  --thz-radius-lg:   8px;    /* Cards, containers, modals */
+  --thz-radius-xl:   12px;   /* Promotional banners, bottom sheets */
+  --thz-radius-full: 9999px; /* Status pills, avatars */
+
+
+  /* ==========================================================================
+     5. ELEVATION / BOX SHADOWS (Subtle, Clean, Non-distracting)
+     ========================================================================== */
+
+  --thz-shadow-none: none;
+  --thz-shadow-xs:   0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --thz-shadow-sm:   0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.08);
+  --thz-shadow-md:   0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06);
+  --thz-shadow-lg:   0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+  --thz-shadow-xl:   0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.03);
+
+
+  /* ==========================================================================
+     6. MOTION & TRANSITIONS (Purposeful, Micro-interactions)
+     ========================================================================== */
+
+  --thz-transition-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --thz-transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --thz-transition-slow:   350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --thz-ease-bounce:       cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ==========================================================================
+   7. ACCESSIBILITY OVERRIDES
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--thz-color-primary-700);
+  outline-offset: 2px;
+}

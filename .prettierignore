@@ -1,0 +1,7 @@
+# Preserve existing audited docs, design preview, and tokens
+docs/
+preview/
+src/styles/
+dist/
+node_modules/
+package-lock.json

@@ -1,0 +1,17 @@
+{
+  "name": "@thehomez/admin-dashboard",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Central Marketplace Admin Dashboard for TheHomez",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@thehomez/shared-types": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

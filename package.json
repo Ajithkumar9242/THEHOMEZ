@@ -1,0 +1,30 @@
+{
+  "name": "thehomez-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hyperlocal Multi-Vendor Quick Commerce & E-commerce Platform for Construction Materials",
+  "workspaces": [
+    "packages/*",
+    "backend",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:packages": "npm --workspace=@thehomez/shared-types run build",
+    "build": "npm run build:packages && npm --workspace=@thehomez/backend run build --if-present",
+    "typecheck": "npm run build:packages && npm run typecheck:all",
+    "typecheck:all": "npm run --workspaces --if-present typecheck",
+    "test": "npm --workspace=@thehomez/backend run test",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.14.0",
+    "@types/node": "^22.8.7",
+    "eslint": "^9.14.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.13.0"
+  }
+}
