@@ -8,6 +8,7 @@ import {
   createAuthRateLimiter,
   createOtpIpRateLimiter,
   validateBody,
+  csrfProtectionMiddleware,
 } from '../middleware/index.js';
 import {
   otpRequestSchema,
@@ -20,8 +21,9 @@ export function createAuthRouter(controller?: AuthController): Router {
   const router = Router();
   const authController = controller || new AuthController();
 
-  // Dual rate limiters for OTP requests: Global IP layer (toll fraud defense) + Scoped Phone/IP layer
+  // Dual rate limiters for OTP operations: Global IP layer + Scoped Phone/IP layer
   const otpIpRateLimiter = createOtpIpRateLimiter();
+  const otpVerifyIpRateLimiter = createOtpIpRateLimiter();
   const otpRateLimiter = createAuthRateLimiter();
 
   // Rate limiter for general auth operations (refresh, logout)
@@ -36,26 +38,29 @@ export function createAuthRouter(controller?: AuthController): Router {
     authController.requestOtp,
   );
 
-  // 2. Phone OTP Verification & Token Issuance (Public, Rate-Limited, Validated)
+  // 2. Phone OTP Verification & Token Issuance (Dual Rate-Limited: Global IP + Phone/IP, Validated)
   router.post(
     '/otp/verify',
+    otpVerifyIpRateLimiter,
     otpRateLimiter,
     validateBody(otpVerifySchema),
     authController.verifyOtp,
   );
 
-  // 3. Refresh Token Rotation (Rate-Limited, Validated)
+  // 3. Refresh Token Rotation (Rate-Limited, CSRF-Protected for cookies, Validated)
   router.post(
     '/refresh',
     authRateLimiter,
+    csrfProtectionMiddleware,
     validateBody(refreshTokenSchema),
     authController.refreshToken,
   );
 
-  // 4. Session Revocation / Logout (Rate-Limited, Optional Auth, Validated)
+  // 4. Session Revocation / Logout (Rate-Limited, CSRF-Protected for cookies, Optional Auth, Validated)
   router.post(
     '/logout',
     authRateLimiter,
+    csrfProtectionMiddleware,
     optionalAuthenticate,
     validateBody(logoutSchema),
     authController.logout,

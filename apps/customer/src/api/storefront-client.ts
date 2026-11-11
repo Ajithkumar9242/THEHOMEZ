@@ -44,15 +44,18 @@ export class StorefrontApiError extends Error {
 export interface StorefrontClientOptions {
   baseUrl?: string;
   getAuthToken?: () => string | null;
+  fetchWithAuth?: (endpointOrUrl: string, init?: RequestInit) => Promise<Response>;
 }
 
 export class StorefrontClient {
   private readonly baseUrl: string;
   private readonly getAuthToken?: () => string | null;
+  private readonly fetchWithAuth?: (endpointOrUrl: string, init?: RequestInit) => Promise<Response>;
 
   constructor(options: StorefrontClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? '/api/v1';
     this.getAuthToken = options.getAuthToken;
+    this.fetchWithAuth = options.fetchWithAuth;
   }
 
   private async request<T>(endpoint: string, init?: RequestInit): Promise<T> {
@@ -62,14 +65,27 @@ export class StorefrontClient {
       ...((init?.headers as Record<string, string>) || {}),
     };
 
-    const token = this.getAuthToken ? this.getAuthToken() : null;
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    // Strip any caller-provided Authorization header so cleared tokens cannot linger.
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() === 'authorization') {
+        delete headers[key];
+      }
+    }
+
+    // When fetchWithAuth (AuthClient.authorizedFetch) is wired, it is the single
+    // authoritative resolver of the live in-memory access token.
+    if (!this.fetchWithAuth) {
+      const token = this.getAuthToken ? this.getAuthToken() : null;
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
     }
 
     let response: Response;
     try {
-      response = await fetch(url, { ...init, headers });
+      response = this.fetchWithAuth
+        ? await this.fetchWithAuth(url, { ...init, headers })
+        : await fetch(url, { ...init, headers });
     } catch (networkError) {
       throw new StorefrontApiError(
         'Unable to connect to TheHomez server. Please check your network connection.',

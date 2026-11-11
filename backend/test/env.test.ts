@@ -278,5 +278,39 @@ describe('Environment Configuration Validation', () => {
         AUTH_RATE_LIMIT_MAX_REQUESTS: '0',
       }),
     ).toThrow(/AUTH_RATE_LIMIT_MAX_REQUESTS must be >= 1/);
+
+    expect(() =>
+      validateConfig({
+        OTP_IP_RATE_LIMIT_MAX_REQUESTS: '0',
+      }),
+    ).toThrow(/OTP_IP_RATE_LIMIT_MAX_REQUESTS must be >= 1/);
+
+    const defaultConfig = validateConfig({ NODE_ENV: 'development' });
+    expect(defaultConfig.auth.rateLimit.authMaxRequests).toBe(10);
+    expect(defaultConfig.auth.rateLimit.otpIpMaxRequests).toBe(25);
+  });
+
+  it('configures trust proxy safely by environment and explicit TRUST_PROXY override', () => {
+    const devConfig = validateConfig({ NODE_ENV: 'development' });
+    expect(devConfig.trustProxy).toBe(false);
+
+    const testConfig = validateConfig({ NODE_ENV: 'test' });
+    expect(testConfig.trustProxy).toBe(false);
+
+    const prodConfig = validateConfig({
+      NODE_ENV: 'production',
+      MONGODB_URI: 'mongodb://prod-cluster.mongodb.net/thehomez',
+      CORS_ORIGIN: 'https://thehomez.com',
+      JWT_ACCESS_SECRET: 'production_access_secret_min_32_chars_long_0',
+      OTP_PEPPER_SECRET: 'production_otp_pepper_secret_min_32_chars_long_2',
+      OTP_PROVIDER: 'msg91',
+      MSG91_AUTH_KEY: 'valid_auth_key_123',
+      MSG91_TEMPLATE_ID: 'valid_template_456',
+    });
+    expect(prodConfig.trustProxy).toBe(1);
+
+    expect(validateConfig({ TRUST_PROXY: '2' }).trustProxy).toBe(2);
+    expect(validateConfig({ TRUST_PROXY: 'false' }).trustProxy).toBe(false);
+    expect(validateConfig({ TRUST_PROXY: 'loopback' }).trustProxy).toBe('loopback');
   });
 });

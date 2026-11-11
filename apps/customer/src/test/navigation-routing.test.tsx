@@ -224,18 +224,42 @@ describe('Browser URL Synchronization & Navigation (Workstream B)', () => {
     it('renders error state and return button when unknown product slug is requested', async () => {
       window.history.replaceState(null, '', '/products/unknown-nonexistent-material');
 
-      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        headers: new Headers({ 'content-type': 'application/json' }),
-        json: async () => ({
-          success: false,
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Product not found in active catalogue',
-          },
-        }),
-      } as Response);
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof Request
+              ? input.url
+              : String(input);
+
+        if (url === '/api/v1/auth/refresh') {
+          return {
+            ok: false,
+            status: 400,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({
+              success: false,
+              error: {
+                code: 'VALIDATION_ERROR',
+                message: 'Refresh token cookie is required',
+              },
+            }),
+          } as Response;
+        }
+
+        return {
+          ok: false,
+          status: 404,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({
+            success: false,
+            error: {
+              code: 'NOT_FOUND',
+              message: 'Product not found in active catalogue',
+            },
+          }),
+        } as Response;
+      });
 
       render(<App />);
 

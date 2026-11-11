@@ -7,7 +7,7 @@ import { correlationIdMiddleware } from './middleware/correlation-id.js';
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
 import { notFoundHandler, errorHandlerMiddleware } from './middleware/error-handler.js';
 import { healthRouter } from './routes/health.routes.js';
-import { authRouter } from './routes/auth.routes.js';
+import { createAuthRouter } from './routes/auth.routes.js';
 import { serviceAreaRouter } from './routes/service-area.routes.js';
 import { partnerRouter } from './routes/partner.routes.js';
 import { categoryRouter } from './routes/category.routes.js';
@@ -47,7 +47,10 @@ export function createApp(): Application {
         'X-Correlation-Id',
         'X-Request-Id',
         'X-Cart-Session-Token',
+        'Idempotency-Key',
         'X-Auth-Transport',
+        'X-Client-Type',
+        'X-Requested-With',
       ],
       exposedHeaders: ['X-Correlation-Id'],
     }),
@@ -68,7 +71,7 @@ export function createApp(): Application {
   app.use(`${config.apiPrefix}/health`, healthRouter);
 
   // Authentication & Identity endpoints
-  app.use(`${config.apiPrefix}/auth`, authRouter);
+  app.use(`${config.apiPrefix}/auth`, createAuthRouter());
 
   // Service Area & Geography endpoints
   app.use(`${config.apiPrefix}/service-areas`, serviceAreaRouter);

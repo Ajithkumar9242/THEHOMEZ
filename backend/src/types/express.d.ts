@@ -10,6 +10,9 @@ declare global {
       partnerFilter?: {
         partnerId: string;
       };
+      customerFilter?: {
+        userId: string;
+      };
     }
   }
 }

@@ -171,13 +171,13 @@ describe('OtpService — Authentication Challenge Lifecycle', () => {
       // First verification succeeds
       await otpService.verifyOtp(phone, otp!, UserType.CUSTOMER);
 
-      // Replay attempt with the exact same OTP must fail
+      // Replay attempt with the exact same OTP must fail identically to invalid OTP
       await expect(otpService.verifyOtp(phone, otp!, UserType.CUSTOMER)).rejects.toThrow(
-        /No active OTP challenge found/,
+        /Invalid or expired OTP code/,
       );
     });
 
-    it('enforces maximum attempt limits (lockout after 3 invalid attempts)', async () => {
+    it('enforces maximum attempt limits (burns OTP challenge after 3 invalid attempts with neutral error)', async () => {
       if (!isDbConnected) return;
 
       const phone = '9999000006';
@@ -185,23 +185,27 @@ describe('OtpService — Authentication Challenge Lifecycle', () => {
 
       // Attempt 1: Invalid code
       await expect(otpService.verifyOtp(phone, '000000', UserType.CUSTOMER)).rejects.toThrow(
-        /Invalid OTP code. 2 attempt\(s\) remaining/,
+        /Invalid or expired OTP code/,
       );
 
       // Attempt 2: Invalid code
       await expect(otpService.verifyOtp(phone, '000000', UserType.CUSTOMER)).rejects.toThrow(
-        /Invalid OTP code. 1 attempt\(s\) remaining/,
+        /Invalid or expired OTP code/,
       );
 
-      // Attempt 3: Exceeds limit -> Lockout
+      // Attempt 3: Exhausts challenge internally while returning neutral INVALID_OTP error
       await expect(otpService.verifyOtp(phone, '000000', UserType.CUSTOMER)).rejects.toThrow(
-        /Maximum verification attempts exceeded/,
+        /Invalid or expired OTP code/,
       );
 
-      // Attempt 4: Even with correct code, challenge is now consumed/locked out
+      const burnedChallenge = await PhoneOtpModel.findOne({ phone: '+919999000006', userType: UserType.CUSTOMER });
+      expect(burnedChallenge?.isConsumed).toBe(true);
+      expect(burnedChallenge?.attempts).toBe(3);
+
+      // Attempt 4: Even with correct code, challenge is now consumed
       const validOtp = MockOtpProvider.getLatestCapturedOtp('+919999000006');
       await expect(otpService.verifyOtp(phone, validOtp!, UserType.CUSTOMER)).rejects.toThrow(
-        /No active OTP challenge found/,
+        /Invalid or expired OTP code/,
       );
     });
 
@@ -243,9 +247,9 @@ describe('OtpService — Authentication Challenge Lifecycle', () => {
       await otpService.requestOtp(phone, UserType.CUSTOMER);
       const otp = MockOtpProvider.getLatestCapturedOtp(normalizedPhone);
 
-      // Attempting to verify the CUSTOMER challenge as PARTNER must fail
+      // Attempting to verify the CUSTOMER challenge as PARTNER must fail identically
       await expect(otpService.verifyOtp(phone, otp!, UserType.PARTNER)).rejects.toThrow(
-        /No active OTP challenge found/,
+        /Invalid or expired OTP code/,
       );
     });
 

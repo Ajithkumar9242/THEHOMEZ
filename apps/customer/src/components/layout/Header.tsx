@@ -5,11 +5,13 @@
  * - Brand logo linking to Home
  * - Search bar with accessible >= 44x44px touch targets
  * - Persistent Delivery PIN indicator pill with tri-state status
- * - B2B Contractor mode switch simulator
+ * - Customer OTP Authentication actions (Sign In / Account / Sign Out)
  */
 
 import React, { useState } from 'react';
 import { useStorefront } from '../../context/StorefrontContext.js';
+import { useOptionalAuthContext } from '../auth/AuthUiContext.js';
+import { formatDisplayPhone } from '../auth/auth-utils.js';
 
 export const Header: React.FC = () => {
   const {
@@ -18,15 +20,15 @@ export const Header: React.FC = () => {
     isServiceable,
     openLocationModal,
     customerSegment,
-    setB2BToken,
     navigateToHome,
     navigateToSearch,
     navigateToPlp,
+    navigateToAccount,
   } = useStorefront();
 
+  const auth = useOptionalAuthContext();
+
   const [searchInput, setSearchInput] = useState('');
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [tokenInput, setTokenInput] = useState('');
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,13 +37,14 @@ export const Header: React.FC = () => {
     }
   };
 
-  const handleApplyB2B = () => {
-    if (tokenInput.trim()) {
-      setB2BToken(tokenInput.trim());
-    } else {
-      setB2BToken(null);
-    }
-    setShowAuthModal(false);
+  const handleSignInClick = () => {
+    auth?.clearError();
+    auth?.openAuthModal();
+  };
+
+  const handleLogoutClick = () => {
+    if (!auth) return;
+    void auth.logout();
   };
 
   const locationPillClass =
@@ -57,6 +60,10 @@ export const Header: React.FC = () => {
       : isServiceable === false && pincode
         ? `⚠️ ${pincode} — Unserviceable`
         : '📍 Select Delivery Location';
+
+  const formattedUserPhone = auth?.user?.phone
+    ? formatDisplayPhone(auth.user.phone, auth.user.phone.startsWith('+91') ? '+91' : '')
+    : '';
 
   return (
     <header className="thz-header" role="banner">
@@ -139,16 +146,44 @@ export const Header: React.FC = () => {
             <span>{locationPillText}</span>
           </button>
 
-          {/* Customer Segment / B2B Switcher */}
-          <button
-            type="button"
-            className={`thz-segment-badge ${customerSegment === 'B2B' ? 'b2b' : ''}`}
-            onClick={() => setShowAuthModal(true)}
-            aria-label={`Current Segment: ${customerSegment}. Click to configure contractor credentials.`}
-            title="Configure B2B Contractor mode"
-          >
-            <span>{customerSegment === 'B2B' ? '🏢 B2B Contractor' : '👤 Retail (B2C)'}</span>
-          </button>
+          {/* Customer Authentication Controls */}
+          {auth?.isAuthenticated && auth.user ? (
+            <div className="thz-auth-header-group" role="group" aria-label="Customer account">
+              {customerSegment === 'B2B' ? (
+                <span className="thz-segment-badge b2b" title="Verified B2B Contractor pricing">
+                  🏢 B2B
+                </span>
+              ) : null}
+              <button
+                type="button"
+                className="thz-account-pill"
+                onClick={navigateToAccount}
+                aria-label={`My Account (${formattedUserPhone})`}
+              >
+                <span aria-hidden="true">👤</span>
+                <span>{formattedUserPhone}</span>
+              </button>
+              <button
+                type="button"
+                className="thz-logout-btn"
+                onClick={handleLogoutClick}
+                disabled={auth.isLoading}
+                aria-label="Sign out"
+              >
+                {auth.isLoading ? 'Signing out…' : 'Sign Out'}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="thz-auth-signin-btn"
+              onClick={handleSignInClick}
+              aria-label="Sign in with phone OTP"
+              aria-busy={auth?.isInitializing ?? false}
+            >
+              <span>Sign In</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -193,73 +228,6 @@ export const Header: React.FC = () => {
           </li>
         </ul>
       </nav>
-
-      {/* Auth / Segment Modal Simulation */}
-      {showAuthModal && (
-        <div className="thz-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="thz-modal-box">
-            <div className="thz-modal-header">
-              <h2 className="thz-modal-title">Commercial Segment Simulator</h2>
-              <button
-                type="button"
-                className="thz-close-btn"
-                onClick={() => setShowAuthModal(false)}
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            <p
-              style={{
-                fontSize: '0.9rem',
-                color: 'var(--thz-text-secondary)',
-                marginBottom: '16px',
-              }}
-            >
-              The storefront dynamically presents wholesale prices and volume discount tiers to
-              verified commercial contractors with active B2B credentials.
-            </p>
-            <div style={{ marginBottom: '16px' }}>
-              <label
-                htmlFor="b2b-token-input"
-                style={{
-                  display: 'block',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  marginBottom: '6px',
-                }}
-              >
-                Contractor Bearer Token (Optional JWT):
-              </label>
-              <input
-                id="b2b-token-input"
-                type="text"
-                className="thz-search-input"
-                style={{ width: '100%', borderRadius: '6px' }}
-                placeholder="Paste contractor JWT or leave blank for guest B2C"
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="thz-btn-secondary"
-                onClick={() => {
-                  setTokenInput('');
-                  setB2BToken(null);
-                  setShowAuthModal(false);
-                }}
-              >
-                Reset to Retail B2C
-              </button>
-              <button type="button" className="thz-btn-primary" onClick={handleApplyB2B}>
-                Apply Credentials
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 };

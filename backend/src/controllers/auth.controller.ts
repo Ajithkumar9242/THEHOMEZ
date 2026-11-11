@@ -175,7 +175,12 @@ export class AuthController {
       const bodyToken = (req.body as RefreshTokenDto)?.refreshToken;
       const refreshToken = cookieToken || bodyToken;
 
+      const hasRefreshCookie = cookieToken !== undefined;
+
       if (!refreshToken || typeof refreshToken !== 'string') {
+        if (hasRefreshCookie) {
+          clearRefreshTokenCookie(res);
+        }
         const errorResponse: IApiErrorResponse = {
           success: false,
           error: {
@@ -192,7 +197,10 @@ export class AuthController {
 
       // Validate format
       const parts = refreshToken.split('.');
-      if (parts.length !== 2 || !parts[0] || !parts[1]) {
+      if (parts.length !== 2 || !parts[0]?.trim() || !parts[1]?.trim()) {
+        if (hasRefreshCookie) {
+          clearRefreshTokenCookie(res);
+        }
         const errorResponse: IApiErrorResponse = {
           success: false,
           error: {
@@ -217,9 +225,9 @@ export class AuthController {
       // Rotate HTTP-only cookie with the new token
       setRefreshTokenCookie(res, tokens.refreshToken);
 
-      // For cookie-based / browser requests without body tokens, do not expose refreshToken in JSON body
-      const browserMode = Boolean(cookieToken && !bodyToken) || isBrowserClient(req);
-      const responseTokens: IRefreshTokenResponse['tokens'] = browserMode && !bodyToken
+      // Browser clients (including cookie-authenticated requests) must NEVER receive refreshToken in JSON
+      const browserClient = isBrowserClient(req);
+      const responseTokens: IRefreshTokenResponse['tokens'] = browserClient
         ? {
             accessToken: tokens.accessToken,
             expiresIn: tokens.expiresIn,
@@ -237,6 +245,9 @@ export class AuthController {
       res.status(200).json(response);
     } catch (error) {
       if (error instanceof TokenError) {
+        if (req.cookies?.[REFRESH_COOKIE_NAME]) {
+          clearRefreshTokenCookie(res);
+        }
         const errorResponse: IApiErrorResponse = {
           success: false,
           error: {

@@ -3,18 +3,32 @@
  *
  * Provides reactive access to:
  * - Tri-state delivery location context (Unlocalized / Serviceable / Unserviceable)
- * - Customer segment / auth token simulation (B2C vs. verified B2B)
- * - Navigation routing state (Home / PLP / PDP / Search)
+ * - Customer commercial segment derived from verified AuthContext identity (B2C vs. B2B)
+ * - Navigation routing state (Home / PLP / PDP / Search / Login / Account)
  * - Location selection modal control
  */
 
-import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+} from 'react';
 import type {
   StorefrontCustomerSegment,
   IStorefrontProductQuery,
   StorefrontSortOption,
 } from '@thehomez/shared-types';
 import { StorefrontClient } from '../api/storefront-client.js';
+import { useOptionalAuthContext } from '../components/auth/AuthUiContext.js';
+import {
+  ACCOUNT_ROUTE_PATH,
+  LOGIN_ROUTE_PATH,
+  buildLoginRedirectUrl,
+  sanitizeRedirectPath,
+} from '../routing/redirect-utils.js';
 
 export interface ServiceAreaSummary {
   id: string;
@@ -24,7 +38,7 @@ export interface ServiceAreaSummary {
   state: string;
 }
 
-export type ViewType = 'home' | 'plp' | 'pdp';
+export type ViewType = 'home' | 'plp' | 'pdp' | 'login' | 'account';
 
 export interface ParsedRoute {
   view: ViewType;
@@ -40,6 +54,25 @@ export interface ParsedRoute {
 export function parseLocationToRoute(pathname: string, search: string): ParsedRoute {
   const cleanPath = pathname.replace(/\/+$/, '') || '/';
   const params = new URLSearchParams(search);
+
+  // 0. Customer Authentication & Protected Account Routes
+  if (cleanPath === LOGIN_ROUTE_PATH) {
+    return {
+      view: 'login',
+      productSlug: null,
+      searchQuery: '',
+      filters: {},
+    };
+  }
+
+  if (cleanPath === ACCOUNT_ROUTE_PATH || cleanPath === '/profile') {
+    return {
+      view: 'account',
+      productSlug: null,
+      searchQuery: '',
+      filters: {},
+    };
+  }
 
   // 1. Product Detail Page: /products/:slug or /storefront/products/:slug
   const pdpMatch = cleanPath.match(/^(?:\/storefront)?\/products\/([^/]+)$/);
@@ -108,7 +141,7 @@ export function parseLocationToRoute(pathname: string, search: string): ParsedRo
   };
 }
 
-function safePushState(url: string) {
+function safeSyncHistory(url: string, replace = false) {
   if (
     typeof window !== 'undefined' &&
     window.history &&
@@ -116,7 +149,11 @@ function safePushState(url: string) {
   ) {
     const current = window.location.pathname + window.location.search;
     if (current !== url) {
-      window.history.pushState(null, '', url);
+      if (replace && typeof window.history.replaceState === 'function') {
+        window.history.replaceState(null, '', url);
+      } else {
+        window.history.pushState(null, '', url);
+      }
     }
   }
 }
@@ -142,10 +179,8 @@ export interface StorefrontContextValue {
   openLocationModal: () => void;
   closeLocationModal: () => void;
 
-  // Commercial Segment & B2B Authentication
+  // Commercial Segment (derived from verified AuthContext identity)
   customerSegment: StorefrontCustomerSegment;
-  b2bToken: string | null;
-  setB2BToken: (token: string | null) => void;
 
   // Storefront API Client Instance
   apiClient: StorefrontClient;
@@ -160,18 +195,23 @@ export interface StorefrontContextValue {
   navigateToSearch: (q: string) => void;
   navigateToProduct: (productSlug: string) => void;
   navigateToPlp: (filters?: Partial<IStorefrontProductQuery>) => void;
+  navigateToLogin: (redirectPath?: string, options?: { replace?: boolean }) => void;
+  navigateToAccount: () => void;
+  navigateToUrl: (url: string, options?: { replace?: boolean }) => void;
 }
 
 const StorefrontContext = createContext<StorefrontContextValue | null>(null);
 
 export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const auth = useOptionalAuthContext();
+
   const [pincode, setPincode] = useState<string | null>(null);
   const [serviceArea, setServiceArea] = useState<ServiceAreaSummary | null>(null);
   const [isServiceable, setIsServiceable] = useState<boolean | null>(null);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState<boolean>(false);
 
-  const [b2bToken, setB2BTokenState] = useState<string | null>(null);
-  const customerSegment: StorefrontCustomerSegment = b2bToken ? 'B2B' : 'B2C';
+  const hasB2BRole = Boolean(auth?.isAuthenticated && auth.user?.roles?.includes('B2B_CUSTOMER'));
+  const customerSegment: StorefrontCustomerSegment = hasB2BRole ? 'B2B' : 'B2C';
 
   // Compute initial route directly from window.location (supports direct deep-link load & refresh)
   const initialRoute = useMemo<ParsedRoute>(() => {
@@ -215,13 +255,16 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
   }, [pincode]);
 
-  // Clean up unknown/invalid paths on initial mount if not a known storefront route
+  // Clean up unknown/invalid paths on initial mount if not a known storefront/auth route
   useEffect(() => {
     if (typeof window === 'undefined' || !window.history?.replaceState) return;
     const cleanPath = window.location.pathname.replace(/\/+$/, '') || '/';
     const isKnownPath =
       cleanPath === '/' ||
       cleanPath === '/home' ||
+      cleanPath === LOGIN_ROUTE_PATH ||
+      cleanPath === ACCOUNT_ROUTE_PATH ||
+      cleanPath === '/profile' ||
       cleanPath === '/products' ||
       cleanPath === '/catalogue' ||
       cleanPath === '/catalog' ||
@@ -234,11 +277,14 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }, []);
 
+  const authUserId = auth?.isAuthenticated ? (auth.user?.id ?? null) : null;
+  const authFetch = auth?.authorizedFetch;
+
   const apiClient = useMemo(() => {
     return new StorefrontClient({
-      getAuthToken: () => b2bToken,
+      ...(authFetch ? { fetchWithAuth: authFetch } : {}),
     });
-  }, [b2bToken]);
+  }, [authFetch, authUserId]);
 
   const setPincodeResult = useCallback(
     (pin: string, serviceable: boolean, area?: ServiceAreaSummary) => {
@@ -266,15 +312,11 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const openLocationModal = useCallback(() => setIsLocationModalOpen(true), []);
   const closeLocationModal = useCallback(() => setIsLocationModalOpen(false), []);
 
-  const setB2BToken = useCallback((token: string | null) => {
-    setB2BTokenState(token);
-  }, []);
-
   const navigateToHome = useCallback(() => {
     setCurrentView('home');
     setSelectedProductSlug(null);
     setSearchQueryText('');
-    safePushState('/');
+    safeSyncHistory('/');
     safeScrollToTop();
   }, []);
 
@@ -287,7 +329,7 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       category: categorySlug,
       page: 1,
     }));
-    safePushState(`/products?category=${encodeURIComponent(categorySlug)}`);
+    safeSyncHistory(`/products?category=${encodeURIComponent(categorySlug)}`);
     safeScrollToTop();
   }, []);
 
@@ -300,20 +342,21 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       ...prev,
       page: 1,
     }));
-    safePushState(`/search?q=${encodeURIComponent(trimmed)}`);
+    safeSyncHistory(`/search?q=${encodeURIComponent(trimmed)}`);
     safeScrollToTop();
   }, []);
 
   const navigateToProduct = useCallback((productSlug: string) => {
     setSelectedProductSlug(productSlug);
     setCurrentView('pdp');
-    safePushState(`/products/${encodeURIComponent(productSlug)}`);
+    safeSyncHistory(`/products/${encodeURIComponent(productSlug)}`);
     safeScrollToTop();
   }, []);
 
   const navigateToPlp = useCallback((filters: Partial<IStorefrontProductQuery> = {}) => {
     setCurrentView('plp');
     setSelectedProductSlug(null);
+    setSearchQueryText('');
     setPlpFilters((prev) => ({
       ...prev,
       ...filters,
@@ -325,9 +368,50 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (filters.sort && filters.sort !== 'featured') params.set('sort', filters.sort);
     if (filters.inStockOnly) params.set('inStockOnly', 'true');
     const qs = params.toString();
-    safePushState(qs ? `/products?${qs}` : '/products');
+    safeSyncHistory(qs ? `/products?${qs}` : '/products');
     safeScrollToTop();
   }, []);
+
+  const navigateToLogin = useCallback(
+    (redirectPath?: string, options?: { replace?: boolean }) => {
+      const targetUrl = redirectPath ? buildLoginRedirectUrl(redirectPath) : LOGIN_ROUTE_PATH;
+      setCurrentView('login');
+      setSelectedProductSlug(null);
+      setSearchQueryText('');
+      safeSyncHistory(targetUrl, options?.replace ?? false);
+      safeScrollToTop();
+    },
+    [],
+  );
+
+  const navigateToAccount = useCallback(() => {
+    setCurrentView('account');
+    setSelectedProductSlug(null);
+    setSearchQueryText('');
+    safeSyncHistory(ACCOUNT_ROUTE_PATH);
+    safeScrollToTop();
+  }, []);
+
+  const navigateToUrl = useCallback(
+    (url: string, options?: { replace?: boolean }) => {
+      const safeTarget = sanitizeRedirectPath(url);
+      const qIdx = safeTarget.indexOf('?');
+      const pathname = qIdx >= 0 ? safeTarget.slice(0, qIdx) : safeTarget;
+      const search = qIdx >= 0 ? safeTarget.slice(qIdx) : '';
+      const route = parseLocationToRoute(pathname, search);
+
+      setCurrentView(route.view);
+      setSelectedProductSlug(route.productSlug);
+      setSearchQueryText(route.searchQuery);
+      setPlpFilters({
+        ...route.filters,
+        ...(pincode ? { pincode } : {}),
+      });
+      safeSyncHistory(safeTarget, options?.replace ?? false);
+      safeScrollToTop();
+    },
+    [pincode],
+  );
 
   const value = useMemo<StorefrontContextValue>(
     () => ({
@@ -340,8 +424,6 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       openLocationModal,
       closeLocationModal,
       customerSegment,
-      b2bToken,
-      setB2BToken,
       apiClient,
       currentView,
       selectedProductSlug,
@@ -352,6 +434,9 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       navigateToSearch,
       navigateToProduct,
       navigateToPlp,
+      navigateToLogin,
+      navigateToAccount,
+      navigateToUrl,
     }),
     [
       pincode,
@@ -363,8 +448,6 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       openLocationModal,
       closeLocationModal,
       customerSegment,
-      b2bToken,
-      setB2BToken,
       apiClient,
       currentView,
       selectedProductSlug,
@@ -375,6 +458,9 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       navigateToSearch,
       navigateToProduct,
       navigateToPlp,
+      navigateToLogin,
+      navigateToAccount,
+      navigateToUrl,
     ],
   );
 

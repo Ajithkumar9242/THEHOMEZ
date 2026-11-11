@@ -1797,6 +1797,297 @@ textarea {
 }
 
 /* ==========================================================================
+   Customer Auth Header Controls, Session Banner & Protected Account View
+   ========================================================================== */
+
+.thz-auth-header-group {
+  display: flex;
+  align-items: center;
+  gap: var(--thz-space-2);
+  flex-wrap: wrap;
+}
+
+.thz-auth-signin-btn {
+  min-height: var(--thz-touch-target);
+  padding: 0 var(--thz-space-4);
+  background-color: var(--thz-primary);
+  color: var(--thz-white);
+  border: 1px solid var(--thz-primary);
+  border-radius: var(--thz-radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+}
+
+.thz-auth-signin-btn:hover {
+  background-color: var(--thz-primary-hover);
+}
+
+.thz-account-pill {
+  min-height: var(--thz-touch-target);
+  padding: 0 var(--thz-space-3);
+  background-color: var(--thz-bg-well);
+  border: 1px solid var(--thz-border-default);
+  border-radius: var(--thz-radius-md);
+  color: var(--thz-text-primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--thz-space-2);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.thz-account-pill:hover {
+  background-color: var(--thz-white);
+  border-color: var(--thz-border-strong);
+}
+
+.thz-logout-btn {
+  min-height: var(--thz-touch-target);
+  padding: 0 var(--thz-space-3);
+  background-color: var(--thz-white);
+  border: 1px solid var(--thz-border-default);
+  border-radius: var(--thz-radius-md);
+  color: var(--thz-text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.thz-logout-btn:hover:not(:disabled) {
+  background-color: var(--thz-error-bg);
+  border-color: var(--thz-error-border);
+  color: var(--thz-error-text);
+}
+
+.thz-logout-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.thz-session-banner {
+  background-color: var(--thz-warning-bg);
+  border-bottom: 1px solid var(--thz-warning-border);
+  color: var(--thz-warning-text);
+}
+
+.thz-session-banner-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--thz-space-3) var(--thz-space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--thz-space-3);
+  flex-wrap: wrap;
+}
+
+.thz-session-banner-text {
+  font-size: 0.9rem;
+}
+
+.thz-session-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--thz-space-2);
+}
+
+.thz-protected-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--thz-space-12) var(--thz-space-4);
+}
+
+.thz-protected-loading-card {
+  max-width: 420px;
+  width: 100%;
+  background-color: var(--thz-white);
+  border: 1px solid var(--thz-border-subtle);
+  border-radius: var(--thz-radius-lg);
+  padding: var(--thz-space-8);
+  text-align: center;
+  box-shadow: var(--thz-shadow-sm);
+}
+
+.thz-protected-spinner {
+  width: 32px;
+  height: 32px;
+  margin: 0 auto var(--thz-space-4);
+  border: 3px solid var(--thz-border-subtle);
+  border-top-color: var(--thz-primary);
+  border-radius: 50%;
+  animation: thz-spin 0.8s linear infinite;
+}
+
+@keyframes thz-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.thz-protected-loading-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--thz-text-primary);
+  margin-bottom: var(--thz-space-2);
+}
+
+.thz-protected-loading-copy {
+  font-size: 0.9rem;
+  color: var(--thz-text-secondary);
+}
+
+.thz-account-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--thz-space-6);
+}
+
+.thz-account-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--thz-space-4);
+  flex-wrap: wrap;
+}
+
+.thz-account-eyebrow {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--thz-primary);
+  margin-bottom: var(--thz-space-1);
+}
+
+.thz-account-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--thz-text-primary);
+  margin-bottom: var(--thz-space-1);
+}
+
+.thz-account-subtitle {
+  font-size: 0.95rem;
+  color: var(--thz-text-secondary);
+}
+
+.thz-account-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--thz-space-3);
+  flex-wrap: wrap;
+}
+
+.thz-account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--thz-space-6);
+}
+
+.thz-account-card {
+  background-color: var(--thz-white);
+  border: 1px solid var(--thz-border-subtle);
+  border-radius: var(--thz-radius-lg);
+  padding: var(--thz-space-6);
+  box-shadow: var(--thz-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--thz-space-4);
+}
+
+.thz-account-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--thz-space-2);
+  padding-bottom: var(--thz-space-3);
+  border-bottom: 1px solid var(--thz-border-subtle);
+}
+
+.thz-account-card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--thz-text-primary);
+}
+
+.thz-account-status-pill {
+  padding: 2px 10px;
+  border-radius: var(--thz-radius-pill);
+  font-size: 0.75rem;
+  font-weight: 700;
+  background-color: var(--thz-success-bg);
+  border: 1px solid var(--thz-success-border);
+  color: var(--thz-success-text);
+}
+
+.thz-account-segment-pill {
+  padding: 2px 10px;
+  border-radius: var(--thz-radius-pill);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: var(--thz-bg-well);
+  border: 1px solid var(--thz-border-default);
+  color: var(--thz-text-secondary);
+}
+
+.thz-account-dl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--thz-space-3);
+}
+
+.thz-account-dl-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--thz-space-4);
+  font-size: 0.9rem;
+}
+
+.thz-account-dl-row dt {
+  color: var(--thz-text-secondary);
+  font-weight: 500;
+}
+
+.thz-account-dl-row dd {
+  color: var(--thz-text-primary);
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+
+.thz-account-card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--thz-space-3);
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: var(--thz-space-2);
+}
+
+.thz-btn-danger-outline {
+  color: var(--thz-error-text);
+  border-color: var(--thz-error-border);
+}
+
+.thz-btn-danger-outline:hover:not(:disabled) {
+  background-color: var(--thz-error-bg);
+}
+
+/* ==========================================================================
    Focus-Visible Accessibility (WCAG 2.1 AA 2.4.7 Focus Visible)
    ========================================================================== */
 
@@ -1809,7 +2100,8 @@ textarea {
 /* Primary buttons (dark background): high-contrast light or dark ring with secondary accent */
 .thz-btn-primary:focus-visible,
 .thz-hero-btn-primary:focus-visible,
-.thz-search-button:focus-visible {
+.thz-search-button:focus-visible,
+.thz-auth-signin-btn:focus-visible {
   outline: 2px solid var(--thz-secondary-dark);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px rgba(139, 38, 38, 0.35);
@@ -1819,6 +2111,8 @@ textarea {
 .thz-btn-secondary:focus-visible,
 .thz-hero-btn-secondary:focus-visible,
 .thz-location-pill:focus-visible,
+.thz-account-pill:focus-visible,
+.thz-logout-btn:focus-visible,
 .thz-segment-badge:focus-visible,
 .thz-variant-chip:focus-visible,
 .thz-stepper-btn:focus-visible,

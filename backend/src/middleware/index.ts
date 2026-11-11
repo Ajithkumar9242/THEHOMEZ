@@ -4,3 +4,4 @@ export * from './error-handler.js';
 export * from './auth.middleware.js';
 export * from './rate-limiter.middleware.js';
 export * from './validate.middleware.js';
+export * from './csrf.middleware.js';

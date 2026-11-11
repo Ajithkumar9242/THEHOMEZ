@@ -396,7 +396,7 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
-      expect(res.body.error.code).toBe('OTP_NOT_FOUND');
+      expect(res.body.error.code).toBe('INVALID_OTP');
     });
 
     it('ensures partner without partnerId association cannot access partner-guarded tenant endpoints', async () => {
@@ -432,13 +432,13 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
       expect(reqRes.status).toBe(200);
       expect(MockOtpProvider.getLatestCapturedOtp(unprovisionedPhone)).toBeUndefined();
 
-      // Attempting to verify any OTP code fails
+      // Attempting to verify any OTP code fails with uniform INVALID_OTP
       const verifyRes = await request(app)
         .post('/api/v1/auth/otp/verify')
         .send({ phone: unprovisionedPhone, otp: '123456', userType: UserType.PARTNER });
 
       expect(verifyRes.status).toBe(400);
-      expect(verifyRes.body.error.code).toBe('OTP_NOT_FOUND');
+      expect(verifyRes.body.error.code).toBe('INVALID_OTP');
     });
 
     it('prohibits suspended accounts from authenticating', async () => {
@@ -451,13 +451,13 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
 
       expect(MockOtpProvider.getLatestCapturedOtp(suspendedPhone)).toBeUndefined();
 
-      // Verify attempt fails
+      // Verify attempt fails with uniform INVALID_OTP
       const res = await request(app)
         .post('/api/v1/auth/otp/verify')
         .send({ phone: suspendedPhone, otp: '123456', userType: UserType.CUSTOMER });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('OTP_NOT_FOUND');
+      expect(res.body.error.code).toBe('INVALID_OTP');
     });
 
     it('prevents identity type escalation through request body tampering', async () => {
@@ -480,7 +480,7 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
   // 3. OTP SECURITY REGRESSION
   // =========================================================================
   describe('3. OTP Security Regression', () => {
-    it('rejects invalid OTP with remaining attempt countdown', async () => {
+    it('rejects invalid OTP with neutral anti-enumeration error response', async () => {
       if (!isDbConnected) return;
 
       const testPhone = '+919444400010';
@@ -494,10 +494,13 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_OTP');
-      expect(res.body.error.message).toContain('attempt(s) remaining');
+      expect(res.body.error.message).toBe(
+        'Invalid or expired OTP code. Please check the code or request a new OTP',
+      );
+      expect(res.body.error.details).toBeUndefined();
     });
 
-    it('enforces maximum failed attempts and locks out OTP challenge after 3 failures', async () => {
+    it('enforces maximum failed attempts and burns OTP challenge after 3 failures with uniform INVALID_OTP response', async () => {
       if (!isDbConnected) return;
 
       const testPhone = '+919444400011';
@@ -512,12 +515,20 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
       await request(app)
         .post('/api/v1/auth/otp/verify')
         .send({ phone: testPhone, otp: '000002', userType: UserType.CUSTOMER });
-      const lockoutRes = await request(app)
+      const finalAttemptRes = await request(app)
         .post('/api/v1/auth/otp/verify')
         .send({ phone: testPhone, otp: '000003', userType: UserType.CUSTOMER });
 
-      expect(lockoutRes.status).toBe(429);
-      expect(lockoutRes.body.error.code).toBe('MAX_ATTEMPTS_EXCEEDED');
+      expect(finalAttemptRes.status).toBe(400);
+      expect(finalAttemptRes.body.error.code).toBe('INVALID_OTP');
+      expect(finalAttemptRes.body.error.message).toBe(
+        'Invalid or expired OTP code. Please check the code or request a new OTP',
+      );
+      expect(finalAttemptRes.body.error.details).toBeUndefined();
+
+      const burnedDoc = await PhoneOtpModel.findOne({ phone: testPhone, userType: UserType.CUSTOMER });
+      expect(burnedDoc?.isConsumed).toBe(true);
+      expect(burnedDoc?.attempts).toBe(3);
 
       // Subsequent attempt with actual valid OTP is also rejected because challenge was consumed
       const validOtp = MockOtpProvider.getLatestCapturedOtp(testPhone);
@@ -525,7 +536,7 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
         .post('/api/v1/auth/otp/verify')
         .send({ phone: testPhone, otp: validOtp, userType: UserType.CUSTOMER });
       expect(postLockoutRes.status).toBe(400);
-      expect(postLockoutRes.body.error.code).toBe('OTP_NOT_FOUND');
+      expect(postLockoutRes.body.error.code).toBe('INVALID_OTP');
     });
 
     it('enforces resend cooldown on successive OTP requests', async () => {

@@ -2,12 +2,25 @@
  * @thehomez/customer-app package exports
  */
 
-export { App } from './App.js';
+export { App, type AppProps } from './App.js';
+export { AuthProvider, useAuth } from './context/AuthContext.js';
+export { AuthClient, AuthApiError } from './api/auth-client.js';
 export { StorefrontProvider, useStorefront } from './context/StorefrontContext.js';
 export { StorefrontClient, StorefrontApiError } from './api/storefront-client.js';
+export { ProtectedRoute, type ProtectedRouteProps } from './routing/ProtectedRoute.js';
+export {
+  sanitizeRedirectPath,
+  getRedirectTargetFromSearch,
+  buildLoginRedirectUrl,
+} from './routing/redirect-utils.js';
 export { Header } from './components/layout/Header.js';
 export { Footer } from './components/layout/Footer.js';
 export { LocationModal } from './components/location/LocationModal.js';
+export {
+  CustomerAuthModal,
+  CustomerAuthFlow,
+  CustomerLoginView,
+} from './components/auth/index.js';
 export { ProductCard } from './components/catalog/ProductCard.js';
 export { AvailabilityBadge } from './components/catalog/AvailabilityBadge.js';
 export { CategoryRail } from './components/catalog/CategoryRail.js';
@@ -19,3 +32,4 @@ export { VolumeTierTable } from './components/product-detail/VolumeTierTable.js'
 export { HomeView } from './views/HomeView.js';
 export { ProductListingView } from './views/ProductListingView.js';
 export { ProductDetailView } from './views/ProductDetailView.js';
+export { CustomerAccountView } from './views/CustomerAccountView.js';

@@ -73,9 +73,12 @@ export function createAuthRateLimiter(overrideOptions?: Partial<Options>) {
 }
 
 /**
- * Global IP-Level Rate Limiter for OTP Requests (SEC-5A1-03 remediation).
- * Prevents SMS gateway exhaustion and telephony toll fraud across distributed phone numbers
+ * Global IP-Level Rate Limiter for OTP Requests and Verification (SEC-5A1-03 remediation).
+ * Prevents SMS gateway exhaustion, telephony toll fraud, and multi-number verification abuse
  * originating from a single IP address.
+ *
+ * Uses process-local in-memory storage (single-instance dev/test only; requires a distributed
+ * store such as rate-limit-redis for multi-instance production deployments).
  */
 export function createOtpIpRateLimiter(overrideOptions?: Partial<Options>) {
   const config = getConfig();
@@ -95,7 +98,9 @@ export function createOtpIpRateLimiter(overrideOptions?: Partial<Options>) {
 }
 
 /**
- * Rate Limiter for General Protected API Operations
+ * Rate Limiter for General Protected API Operations.
+ * Uses process-local in-memory storage (single-instance dev/test only; requires a distributed
+ * store such as rate-limit-redis for multi-instance production deployments).
  */
 export function createApiRateLimiter(overrideOptions?: Partial<Options>) {
   const config = getConfig();

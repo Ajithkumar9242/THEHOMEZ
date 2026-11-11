@@ -1,7 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
+import { Types } from 'mongoose';
 import {
   UserType,
   UserStatus,
+  COMMERCE_ERROR_CODES,
   type PermissionCode,
   type IApiErrorResponse,
 } from '@thehomez/shared-types';
@@ -298,4 +300,217 @@ export function partnerTenantGuard(req: Request, res: Response, next: NextFuncti
   }
 
   next();
+}
+
+/**
+ * Inspects request params, query, body, and x-user-id header for client-supplied
+ * userId/customerId tampering. Customer identity is never derived from client input.
+ */
+function rejectClientIdentitySpoof(
+  req: Request,
+  res: Response,
+  expectedUserId: string | null,
+  expectedCustomerId?: string,
+): boolean {
+  const fields: Array<{
+    name: 'userId' | 'customerId';
+    expected: string | undefined;
+    checkHeader: boolean;
+  }> = [
+    { name: 'userId', expected: expectedUserId ?? undefined, checkHeader: true },
+    { name: 'customerId', expected: expectedCustomerId, checkHeader: false },
+  ];
+
+  const sources: Array<{ label: string; container: unknown }> = [
+    { label: 'route parameter', container: req.params },
+    { label: 'query parameter', container: req.query },
+    { label: 'request body', container: req.body },
+  ];
+
+  for (const field of fields) {
+    for (const { label, container } of sources) {
+      if (
+        container &&
+        typeof container === 'object' &&
+        field.name in container &&
+        (container as Record<string, unknown>)[field.name] !== undefined
+      ) {
+        const supplied = (container as Record<string, unknown>)[field.name];
+        if (!field.expected || supplied !== field.expected) {
+          sendSecurityError(
+            req,
+            res,
+            403,
+            'CUSTOMER_IDENTITY_MISMATCH',
+            `Access denied: ${label} ${field.name} does not match authenticated customer identity`,
+          );
+          return true;
+        }
+      }
+    }
+
+    if (field.checkHeader && req.headers['x-user-id'] !== undefined) {
+      const suppliedHeader = req.headers['x-user-id'];
+      if (!field.expected || suppliedHeader !== field.expected) {
+        sendSecurityError(
+          req,
+          res,
+          403,
+          'CUSTOMER_IDENTITY_MISMATCH',
+          'Access denied: request header userId does not match authenticated customer identity',
+        );
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Shared verification logic for customer-only and optional-customer routes:
+ * reloads UserModel from MongoDB to confirm ACTIVE status, UserType.CUSTOMER,
+ * fresh roles/permissions, and rejects client-supplied userId/customerId spoofing.
+ */
+async function verifyAndAttachCustomerPrincipal(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const authenticatedUser = req.user;
+  if (!authenticatedUser) {
+    sendSecurityError(
+      req,
+      res,
+      401,
+      'UNAUTHENTICATED',
+      'Authentication required prior to customer principal validation',
+    );
+    return;
+  }
+
+  if (authenticatedUser.userType !== UserType.CUSTOMER) {
+    sendSecurityError(
+      req,
+      res,
+      403,
+      COMMERCE_ERROR_CODES.CUSTOMER_IDENTITY_REQUIRED,
+      'Access denied: customer identity is required for this operation',
+    );
+    return;
+  }
+
+  if (!Types.ObjectId.isValid(authenticatedUser.id)) {
+    sendSecurityError(
+      req,
+      res,
+      401,
+      'USER_NOT_FOUND',
+      'Authenticated customer identity is invalid',
+    );
+    return;
+  }
+
+  try {
+    // Reload latest user document from database to enforce instant revocation and fresh roles
+    const freshUser = await UserModel.findById(authenticatedUser.id);
+    if (!freshUser) {
+      sendSecurityError(
+        req,
+        res,
+        401,
+        'USER_NOT_FOUND',
+        'Authenticated user account no longer exists',
+      );
+      return;
+    }
+
+    if (freshUser.userType !== UserType.CUSTOMER) {
+      sendSecurityError(
+        req,
+        res,
+        403,
+        COMMERCE_ERROR_CODES.CUSTOMER_IDENTITY_REQUIRED,
+        'Access denied: customer identity is required for this operation',
+      );
+      return;
+    }
+
+    if (freshUser.status !== UserStatus.ACTIVE) {
+      sendSecurityError(
+        req,
+        res,
+        401,
+        'ACCOUNT_NOT_ACTIVE',
+        `Account is ${freshUser.status.toLowerCase()}. Please contact support`,
+      );
+      return;
+    }
+
+    const freshPrincipal = await rbacService.resolveUserPrincipal(freshUser);
+
+    if (rejectClientIdentitySpoof(req, res, freshPrincipal.id, freshPrincipal.customerId)) {
+      return;
+    }
+
+    req.user = freshPrincipal;
+    req.customerFilter = { userId: freshPrincipal.id };
+
+    next();
+  } catch (err: unknown) {
+    next(err);
+  }
+}
+
+/**
+ * Customer Principal Guard Middleware
+ *
+ * Enforces strict customer-only access for Customer Commerce endpoints:
+ * 1. Requires an authenticated principal (req.user).
+ * 2. Requires UserType.CUSTOMER (rejects PARTNER, STAFF/Admin, and other types with 403).
+ * 3. Reloads the user record from MongoDB to verify ACTIVE status and current roles.
+ * 4. Rejects client-supplied userId/customerId spoofing and injects req.customerFilter.
+ */
+export async function requireCustomerPrincipal(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  if (!req.user) {
+    sendSecurityError(
+      req,
+      res,
+      401,
+      'UNAUTHENTICATED',
+      'Authentication required prior to customer principal validation',
+    );
+    return;
+  }
+
+  await verifyAndAttachCustomerPrincipal(req, res, next);
+}
+
+/**
+ * Optional Customer Principal Guard Middleware
+ *
+ * Designed for guest-capable commerce endpoints (e.g. cart routes after optionalAuthenticate):
+ * - If req.user is absent (anonymous guest flow), rejects any spoofed client userId/customerId
+ *   and proceeds next().
+ * - If req.user is present, enforces the full customer principal check (UserType.CUSTOMER,
+ *   ACTIVE DB status, fresh role resolution, and anti-spoofing).
+ */
+export async function enforceOptionalCustomerPrincipal(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  if (!req.user) {
+    if (rejectClientIdentitySpoof(req, res, null)) {
+      return;
+    }
+    next();
+    return;
+  }
+
+  await verifyAndAttachCustomerPrincipal(req, res, next);
 }

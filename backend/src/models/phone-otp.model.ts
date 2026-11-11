@@ -82,6 +82,7 @@ const phoneOtpSchema = new Schema<IPhoneOtpDocument>(
  * Compound index to rapidly locate the latest active OTP for an identity tuple.
  */
 phoneOtpSchema.index({ phone: 1, userType: 1, isConsumed: 1, createdAt: -1 });
+phoneOtpSchema.index({ phone: 1, userType: 1, createdAt: -1 });
 
 /**
  * Retention TTL index: cleans up old OTP documents 1 hour after expiration.
