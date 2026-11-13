@@ -5,6 +5,7 @@ export interface IUserDocument extends Document {
   phone: string;
   userType: UserType;
   email?: string;
+  passwordHash?: string;
   status: UserStatus;
   roles: string[];
   partnerId?: mongoose.Types.ObjectId;
@@ -38,6 +39,11 @@ const userSchema = new Schema<IUserDocument>(
         /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
         'Email must be a valid email address',
       ],
+    },
+    passwordHash: {
+      type: String,
+      select: false,
+      default: undefined,
     },
     status: {
       type: String,

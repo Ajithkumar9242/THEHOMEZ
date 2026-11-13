@@ -16,6 +16,7 @@ import React, {
   useCallback,
   useEffect,
 } from 'react';
+import { STOREFRONT_SORT_OPTIONS } from '@thehomez/shared-types';
 import type {
   StorefrontCustomerSegment,
   IStorefrontProductQuery,
@@ -48,6 +49,40 @@ export interface ParsedRoute {
   productSlug: string | null;
   searchQuery: string;
   filters: IStorefrontProductQuery;
+}
+
+function parseNonNegativeInteger(value: string | null): number | undefined {
+  if (value === null || !/^\d+$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function parseDiscoveryFilters(params: URLSearchParams): IStorefrontProductQuery {
+  const category = params.get('category') || undefined;
+  const subcategory = params.get('subcategory') || undefined;
+  const brand = params.get('brand') || undefined;
+  const sortParam = params.get('sort');
+  const sort = STOREFRONT_SORT_OPTIONS.includes(sortParam as StorefrontSortOption)
+    ? (sortParam as StorefrontSortOption)
+    : undefined;
+  const page = parseNonNegativeInteger(params.get('page'));
+  const minPricePaise = parseNonNegativeInteger(params.get('minPricePaise'));
+  const maxPricePaise = parseNonNegativeInteger(params.get('maxPricePaise'));
+  const hasValidPriceRange =
+    minPricePaise === undefined ||
+    maxPricePaise === undefined ||
+    maxPricePaise >= minPricePaise;
+
+  return {
+    ...(category ? { category } : {}),
+    ...(subcategory ? { subcategory } : {}),
+    ...(brand ? { brand } : {}),
+    ...(sort ? { sort } : {}),
+    ...(params.get('inStockOnly') === 'true' ? { inStockOnly: true } : {}),
+    ...(hasValidPriceRange && minPricePaise !== undefined ? { minPricePaise } : {}),
+    ...(hasValidPriceRange && maxPricePaise !== undefined ? { maxPricePaise } : {}),
+    page: page && page > 0 ? page : 1,
+  };
 }
 
 /**
@@ -128,31 +163,19 @@ export function parseLocationToRoute(pathname: string, search: string): ParsedRo
       view: 'plp',
       productSlug: null,
       searchQuery: q.trim(),
-      filters: { page: 1 },
+      filters: parseDiscoveryFilters(params),
     };
   }
 
   // 4. Products / Catalogue / PLP: /products, /catalogue, /catalog
   if (cleanPath === '/products' || cleanPath === '/catalogue' || cleanPath === '/catalog') {
-    const category = params.get('category') || undefined;
-    const brand = params.get('brand') || undefined;
-    const sort = (params.get('sort') as StorefrontSortOption) || undefined;
-    const pageStr = params.get('page');
-    const page = pageStr ? parseInt(pageStr, 10) : 1;
-    const inStockOnly = params.get('inStockOnly') === 'true';
     const q = params.get('q') || params.get('search') || '';
 
     return {
       view: 'plp',
       productSlug: null,
       searchQuery: q.trim(),
-      filters: {
-        ...(category ? { category } : {}),
-        ...(brand ? { brand } : {}),
-        ...(sort ? { sort } : {}),
-        ...(inStockOnly ? { inStockOnly } : {}),
-        page: isNaN(page) ? 1 : page,
-      },
+      filters: parseDiscoveryFilters(params),
     };
   }
 

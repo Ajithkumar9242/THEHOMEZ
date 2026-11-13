@@ -71,6 +71,51 @@ describe('Browser URL Synchronization & Navigation (Workstream B)', () => {
       expect(route.filters.page).toBe(2);
     });
 
+    it('restores all supported discovery filters from catalogue and search URLs', () => {
+      const catalogue = parseLocationToRoute(
+        '/products',
+        '?category=steel&subcategory=tmt-bars&brand=Tata&minPricePaise=1200&maxPricePaise=9000&inStockOnly=true&sort=price_asc&page=3',
+      );
+      expect(catalogue.filters).toMatchObject({
+        category: 'steel',
+        subcategory: 'tmt-bars',
+        brand: 'Tata',
+        minPricePaise: 1200,
+        maxPricePaise: 9000,
+        inStockOnly: true,
+        sort: 'price_asc',
+        page: 3,
+      });
+
+      const search = parseLocationToRoute(
+        '/search',
+        '?q=tmt&brand=Tata&minPricePaise=1200&maxPricePaise=9000&inStockOnly=true&sort=price_desc&page=2',
+      );
+      expect(search.searchQuery).toBe('tmt');
+      expect(search.filters).toMatchObject({
+        brand: 'Tata',
+        minPricePaise: 1200,
+        maxPricePaise: 9000,
+        inStockOnly: true,
+        sort: 'price_desc',
+        page: 2,
+      });
+    });
+
+    it('ignores malformed discovery filter values in URLs', () => {
+      const route = parseLocationToRoute(
+        '/products',
+        '?minPricePaise=1.5&maxPricePaise=999999999999999999999&sort=unsupported&page=-1',
+      );
+      expect(route.filters).toEqual({ page: 1 });
+
+      const invertedRange = parseLocationToRoute(
+        '/products',
+        '?minPricePaise=9000&maxPricePaise=1200',
+      );
+      expect(invertedRange.filters).toEqual({ page: 1 });
+    });
+
     it('defaults unknown or invalid paths gracefully to home', () => {
       const route1 = parseLocationToRoute('/some/invalid/404/path', '');
       expect(route1.view).toBe('home');

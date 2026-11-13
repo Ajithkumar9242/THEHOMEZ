@@ -53,7 +53,7 @@ export const ProductListingView: React.FC = () => {
     ...plpFilters,
     pincode: pincode || undefined,
     limit: 20,
-    page: 1,
+    page: plpFilters.page ?? 1,
   });
 
   // Sync external filters from context
@@ -70,18 +70,22 @@ export const ProductListingView: React.FC = () => {
       setLoading(true);
       setError(null);
 
+      const discoveryQuery: IStorefrontProductQuery = {
+        ...queryState,
+        pincode: pincode || undefined,
+      };
+      // Preserve the requested filter in the URL/state until a location is known,
+      // but only ask the API to apply local stock filtering with a PIN.
+      if (!pincode) delete discoveryQuery.inStockOnly;
+
       let response;
       if (searchQueryText.trim().length >= 2) {
         response = await apiClient.searchProducts({
           q: searchQueryText.trim(),
-          ...queryState,
-          pincode: pincode || undefined,
+          ...discoveryQuery,
         });
       } else {
-        response = await apiClient.listProducts({
-          ...queryState,
-          pincode: pincode || undefined,
-        });
+        response = await apiClient.listProducts(discoveryQuery);
       }
 
       setProducts(response.items);
@@ -125,21 +129,24 @@ export const ProductListingView: React.FC = () => {
   // Synchronize active PLP filter/sort/page state with browser URL using replaceState
   useEffect(() => {
     if (typeof window === 'undefined' || !window.history?.replaceState) return;
+    const params = new URLSearchParams();
+    if (queryState.category) params.set('category', queryState.category);
     if (isSearchMode) {
-      const params = new URLSearchParams();
       params.set('q', searchQueryText.trim());
-      if (queryState.page && queryState.page > 1) params.set('page', String(queryState.page));
-      if (queryState.sort && queryState.sort !== 'featured') params.set('sort', queryState.sort);
-      window.history.replaceState(null, '', `/search?${params.toString()}`);
-    } else {
-      const params = new URLSearchParams();
-      if (queryState.category) params.set('category', queryState.category);
-      if (queryState.brand) params.set('brand', queryState.brand);
-      if (queryState.sort && queryState.sort !== 'featured') params.set('sort', queryState.sort);
-      if (queryState.page && queryState.page > 1) params.set('page', String(queryState.page));
-      const qs = params.toString();
-      window.history.replaceState(null, '', qs ? `/products?${qs}` : '/products');
     }
+    if (queryState.subcategory) params.set('subcategory', queryState.subcategory);
+    if (queryState.brand) params.set('brand', queryState.brand);
+    if (queryState.minPricePaise !== undefined)
+      params.set('minPricePaise', String(queryState.minPricePaise));
+    if (queryState.maxPricePaise !== undefined)
+      params.set('maxPricePaise', String(queryState.maxPricePaise));
+    if (queryState.inStockOnly) params.set('inStockOnly', 'true');
+    if (queryState.sort && queryState.sort !== 'featured') params.set('sort', queryState.sort);
+    if (queryState.page && queryState.page > 1) params.set('page', String(queryState.page));
+
+    const queryString = params.toString();
+    const pathname = isSearchMode ? '/search' : '/products';
+    window.history.replaceState(null, '', queryString ? `${pathname}?${queryString}` : pathname);
   }, [queryState, isSearchMode, searchQueryText]);
 
   const pageTitle = isSearchMode

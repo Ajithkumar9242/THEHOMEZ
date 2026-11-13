@@ -89,6 +89,21 @@ export const otpVerifySchema = z
 
 export type OtpVerifyDto = z.infer<typeof otpVerifySchema>;
 
+/** Schema for the temporary development-only Admin email/password login. */
+export const adminPasswordLoginSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .email()
+      .max(254)
+      .transform((value) => value.toLowerCase()),
+    password: z.string().min(1).max(128),
+  })
+  .strict();
+
+export type AdminPasswordLoginDto = z.infer<typeof adminPasswordLoginSchema>;
+
 /**
  * Schema for POST /api/v1/auth/refresh
  * Accepts refreshToken in request body for API clients, or empty body when supplied via HTTP-only cookie.

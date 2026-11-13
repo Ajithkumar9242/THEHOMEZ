@@ -11,13 +11,17 @@ import {
   type IAuthUser,
   type PermissionCode,
   UserType,
+  UserStatus,
 } from '@thehomez/shared-types';
 import { OtpService, OtpError } from '../services/otp/otp.service.js';
 import { TokenService, TokenError } from '../services/token/token.service.js';
 import { RbacService } from '../services/rbac/rbac.service.js';
 import { UserModel, type IUserDocument } from '../models/user.model.js';
 import { RoleModel } from '../models/role.model.js';
+import { getDatabaseDiagnostics } from '../database/database.js';
+import { verifyPassword } from '../services/auth/password.service.js';
 import type {
+  AdminPasswordLoginDto,
   OtpRequestDto,
   OtpVerifyDto,
   RefreshTokenDto,
@@ -97,6 +101,75 @@ export class AuthController {
         res.status(error.statusCode).json(errorResponse);
         return;
       }
+      next(error);
+    }
+  };
+
+  /** Temporary development-only Admin sign-in, scoped to the isolated verification database. */
+  public adminPasswordLogin = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const diagnostics = getDatabaseDiagnostics();
+      if (diagnostics.status !== 'connected' || diagnostics.name !== 'thehomez_admin_verify') {
+        res.status(404).json({
+          success: false,
+          error: {
+            code: 'AUTH_UNAVAILABLE',
+            message: 'Temporary Admin sign-in is unavailable.',
+            correlationId: req.correlationId,
+            timestamp: new Date().toISOString(),
+          },
+        });
+        return;
+      }
+
+      const { email, password } = req.body as AdminPasswordLoginDto;
+      const user = await UserModel.findOne({ email, userType: UserType.STAFF }).select(
+        '+passwordHash',
+      );
+      const passwordMatches = await verifyPassword(password, user?.passwordHash);
+
+      if (!user || user.status !== UserStatus.ACTIVE || !passwordMatches) {
+        res.status(401).json({
+          success: false,
+          error: {
+            code: 'INVALID_CREDENTIALS',
+            message: 'Invalid email or password.',
+            correlationId: req.correlationId,
+            timestamp: new Date().toISOString(),
+          },
+        });
+        return;
+      }
+
+      const permissions = await this.rbacService.getEffectivePermissions(user.roles || []);
+      const context = {
+        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip || req.socket.remoteAddress,
+      };
+      const tokens = await this.tokenService.generateTokenPair(user, context);
+      setRefreshTokenCookie(res, tokens.refreshToken);
+
+      const responseTokens: IAuthResponse['tokens'] = isBrowserClient(req)
+        ? {
+            accessToken: tokens.accessToken,
+            expiresIn: tokens.expiresIn,
+            tokenType: tokens.tokenType,
+          }
+        : tokens;
+      const response: IApiResponse<IAuthResponse> = {
+        success: true,
+        data: {
+          tokens: responseTokens,
+          user: this.formatAuthUser(user, permissions),
+        },
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
       next(error);
     }
   };
@@ -286,7 +359,9 @@ export class AuthController {
             message: 'Refresh token is required to log out',
             correlationId: req.correlationId,
             timestamp: new Date().toISOString(),
-            details: [{ field: 'refreshToken', message: 'Refresh token is required in cookie or body' }],
+            details: [
+              { field: 'refreshToken', message: 'Refresh token is required in cookie or body' },
+            ],
           },
         };
         res.status(400).json(errorResponse);

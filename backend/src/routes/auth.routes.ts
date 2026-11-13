@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PermissionCode } from '@thehomez/shared-types';
 import { AuthController } from '../controllers/auth.controller.js';
+import { getConfig } from '../config/env.js';
 import {
   authenticate,
   optionalAuthenticate,
@@ -13,6 +14,7 @@ import {
 import {
   otpRequestSchema,
   otpVerifySchema,
+  adminPasswordLoginSchema,
   refreshTokenSchema,
   logoutSchema,
 } from './auth.schemas.js';
@@ -28,6 +30,17 @@ export function createAuthRouter(controller?: AuthController): Router {
 
   // Rate limiter for general auth operations (refresh, logout)
   const authRateLimiter = createAuthRateLimiter();
+
+  // Temporary Admin password auth is intentionally absent outside development.
+  if (getConfig().isDevelopment || getConfig().isTest) {
+    router.post(
+      '/admin/password',
+      createAuthRateLimiter(),
+      csrfProtectionMiddleware,
+      validateBody(adminPasswordLoginSchema),
+      authController.adminPasswordLogin,
+    );
+  }
 
   // 1. Phone OTP Request (Dual Rate-Limited: Global IP + Phone/IP, Validated)
   router.post(
