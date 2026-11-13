@@ -19,6 +19,9 @@ import {
   adminPartnerAvailabilityRouter,
 } from './routes/partner-availability.routes.js';
 import { storefrontRouter } from './routes/storefront.routes.js';
+import { createCustomerAddressRouter } from './routes/customer-address.routes.js';
+import { createCartRouter } from './routes/cart.routes.js';
+import { createCheckoutRouter } from './routes/checkout.routes.js';
 
 /**
  * Creates and configures the Express application.
@@ -97,6 +100,13 @@ export function createApp(): Application {
 
   // Consumer Storefront Discovery & Browsing
   app.use(`${config.apiPrefix}/storefront`, storefrontRouter);
+
+  // Customer Delivery Site Address Book
+  app.use(`${config.apiPrefix}/customer/addresses`, createCustomerAddressRouter());
+
+  // Customer Shopping Cart (Milestone 5B.2)
+  app.use(`${config.apiPrefix}/cart`, createCartRouter());
+  app.use(`${config.apiPrefix}/checkout`, createCheckoutRouter());
 
   // Unmatched route handler (404)
   app.use(notFoundHandler);

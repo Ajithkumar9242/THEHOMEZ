@@ -13,6 +13,12 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useStorefront } from '../context/StorefrontContext.js';
+import { useOptionalAuthContext } from '../components/auth/AuthUiContext.js';
+import { buildCartAddKey, useOptionalCart } from '../context/CartContext.js';
+import {
+  mapCartApiErrorMessage,
+  validateCartQuantity,
+} from '../components/cart/cart-quantity.utils.js';
 import { VariantSelector } from '../components/product-detail/VariantSelector.js';
 import { QuantityStepper } from '../components/product-detail/QuantityStepper.js';
 import { VolumeTierTable } from '../components/product-detail/VolumeTierTable.js';
@@ -34,8 +40,11 @@ export const ProductDetailView: React.FC = () => {
     isServiceable,
     apiClient,
     navigateToPlp,
+    navigateToCart,
     openLocationModal,
   } = useStorefront();
+  const auth = useOptionalAuthContext();
+  const cartCtx = useOptionalCart();
 
   const [detail, setDetail] = useState<IStorefrontProductDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,6 +53,14 @@ export const ProductDetailView: React.FC = () => {
   // Neutral Initial State (Decision #53 / AC-DISCOV-19): null variant preselected!
   const [selectedVariant, setSelectedVariant] = useState<IStorefrontVariantDetail | null>(null);
   const [quantity, setQuantity] = useState<string>('1');
+  const [cartFeedback, setCartFeedback] = useState<{
+    type: 'success' | 'error' | 'info';
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    setCartFeedback(null);
+  }, [selectedProductSlug, selectedVariant, quantity]);
 
   useEffect(() => {
     let isMounted = true;
@@ -145,12 +162,63 @@ export const ProductDetailView: React.FC = () => {
   const isMultiVariant = product.hasVariants;
   const isUnserviceable = isServiceable === false;
 
-  // Determine order button state (Milestone 4 boundary: Cart/Checkout is in M5)
   const isVariantPending = isMultiVariant && !selectedVariant;
-  const isOutOfStock =
+  const isOutOfStock = Boolean(
     activeAvailability &&
-    activeAvailability.availabilityUnknown === false &&
-    activeAvailability.isAvailable === false;
+      activeAvailability.availabilityUnknown === false &&
+      activeAvailability.isAvailable === false,
+  );
+  const qtyValidation = activeUnit
+    ? validateCartQuantity(quantity, activeUnit)
+    : { isValid: false as const, message: undefined };
+  const addKey = buildCartAddKey(product.id, selectedVariant?.id ?? null);
+  const isAddingThisItem = cartCtx?.isAddingKey === addKey;
+
+  const handleAddToCart = async () => {
+    if (isVariantPending || isOutOfStock || isUnserviceable || !activeUnit || isAddingThisItem) {
+      return;
+    }
+
+    if (!qtyValidation.isValid) {
+      setCartFeedback({
+        type: 'error',
+        message: qtyValidation.message || 'Please enter a valid quantity.',
+      });
+      return;
+    }
+
+    if (!auth?.isAuthenticated) {
+      setCartFeedback({
+        type: 'info',
+        message: 'Sign in with OTP to add materials to your cart.',
+      });
+      auth?.clearError();
+      auth?.openAuthModal();
+      return;
+    }
+
+    if (!cartCtx) return;
+
+    setCartFeedback(null);
+    try {
+      await cartCtx.addItem({
+        productId: product.id,
+        variantId: selectedVariant ? selectedVariant.id : null,
+        quantity: quantity.trim(),
+        mode: 'INCREMENT',
+        ...(pincode ? { pincode } : {}),
+      });
+      setCartFeedback({
+        type: 'success',
+        message: `${product.title}${selectedVariant ? ` (${selectedVariant.title})` : ''} added to your cart.`,
+      });
+    } catch (err: unknown) {
+      setCartFeedback({
+        type: 'error',
+        message: mapCartApiErrorMessage(err),
+      });
+    }
+  };
 
   return (
     <div className="thz-pdp-view">
@@ -361,7 +429,8 @@ export const ProductDetailView: React.FC = () => {
                 unit={activeUnit}
                 quantity={quantity}
                 onChange={setQuantity}
-                disabled={isUnserviceable || isOutOfStock}
+                disabled={isUnserviceable || isOutOfStock || isAddingThisItem}
+                errorMessage={qtyValidation.isValid ? null : (qtyValidation.message ?? null)}
               />
             </div>
           )}
@@ -376,21 +445,31 @@ export const ProductDetailView: React.FC = () => {
             />
           )}
 
-          {/* Milestone 4 Order Action / Milestone Boundary Disclaimer */}
+          {/* Customer Cart Action (Milestone 5B.2) */}
           <div style={{ marginTop: '20px' }}>
             <button
               type="button"
               className="thz-btn-primary"
               style={{ width: '100%', height: '48px', fontSize: '1.05rem' }}
-              disabled={isVariantPending || isOutOfStock || isUnserviceable}
+              disabled={
+                isVariantPending ||
+                isOutOfStock ||
+                isUnserviceable ||
+                !qtyValidation.isValid ||
+                isAddingThisItem
+              }
+              aria-busy={isAddingThisItem}
+              onClick={() => void handleAddToCart()}
               aria-label={
                 isVariantPending
-                  ? 'Select an option to proceed'
+                  ? 'Select an option to add to cart'
                   : isOutOfStock
                     ? 'Material currently out of stock in your area'
                     : isUnserviceable
                       ? 'Ordering unavailable in this unserviceable postal code'
-                      : 'Milestone 4 Storefront Discovery — Ordering enabled in Milestone 5'
+                      : isAddingThisItem
+                        ? 'Adding material to cart'
+                        : `Add ${product.title} to Cart`
               }
             >
               {isVariantPending
@@ -399,19 +478,28 @@ export const ProductDetailView: React.FC = () => {
                   ? 'Out of Stock in Local Hub'
                   : isUnserviceable
                     ? 'Delivery Unavailable in Area'
-                    : 'Add to Order (Available in Milestone 5)'}
+                    : isAddingThisItem
+                      ? 'Adding to Cart…'
+                      : 'Add to Cart'}
             </button>
-            <p
-              style={{
-                fontSize: '0.75rem',
-                color: 'var(--thz-text-muted)',
-                textAlign: 'center',
-                marginTop: '8px',
-              }}
-            >
-              Milestone 4 Scope: Storefront discovery & browsing. Cart, checkout, and payment
-              modules will be unlocked in Milestone 5.
-            </p>
+
+            {cartFeedback ? (
+              <div
+                className={`thz-pdp-cart-feedback ${cartFeedback.type}`}
+                role={cartFeedback.type === 'error' ? 'alert' : 'status'}
+              >
+                <span>{cartFeedback.message}</span>
+                {cartFeedback.type === 'success' ? (
+                  <button
+                    type="button"
+                    className="thz-btn-secondary thz-btn-compact"
+                    onClick={navigateToCart}
+                  >
+                    View Cart
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

@@ -13,3 +13,7 @@ export * from './product-pricing.model.js';
 export * from './price-history.model.js';
 export * from './partner-product.model.js';
 export * from './partner-availability-history.model.js';
+export * from './customer-address.model.js';
+export * from './cart.model.js';
+export * from './cart-validation-snapshot.model.js';
+export * from './checkout-session.model.js';

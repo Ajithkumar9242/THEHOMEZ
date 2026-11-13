@@ -44,3 +44,6 @@ export {
 export * from './partner-availability.routes.js';
 export * from './storefront.schemas.js';
 export * from './storefront.routes.js';
+export * from './customer-address.routes.js';
+export * from './cart.routes.js';
+export * from './checkout.routes.js';

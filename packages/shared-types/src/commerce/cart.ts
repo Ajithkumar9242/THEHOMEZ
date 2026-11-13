@@ -47,6 +47,11 @@ export const MAX_CART_ITEMS = 50;
 export const GUEST_CART_TTL_DAYS = 30;
 
 /**
+ * Default validity window (in minutes) for a server-persisted cart validation snapshot.
+ */
+export const CART_VALIDATION_SNAPSHOT_TTL_MINUTES = 15;
+
+/**
  * HTTP header carrying the client-generated UUID v4 guest cart session token.
  */
 export const CART_SESSION_TOKEN_HEADER = 'X-Cart-Session-Token';
@@ -139,6 +144,9 @@ export const CART_ERROR_CODES = {
   CART_VERSION_CONFLICT: 'CART_VERSION_CONFLICT',
   CART_MERGE_CONFLICT: 'CART_MERGE_CONFLICT',
   PRICE_DRIFT_UNACKNOWLEDGED: 'PRICE_DRIFT_UNACKNOWLEDGED',
+  VALIDATION_SNAPSHOT_NOT_FOUND: 'VALIDATION_SNAPSHOT_NOT_FOUND',
+  VALIDATION_SNAPSHOT_EXPIRED: 'VALIDATION_SNAPSHOT_EXPIRED',
+  VALIDATION_SNAPSHOT_STALE: 'VALIDATION_SNAPSHOT_STALE',
   QUANTITY_MUST_BE_INTEGER: 'QUANTITY_MUST_BE_INTEGER',
   QUANTITY_PRECISION_EXCEEDED: 'QUANTITY_PRECISION_EXCEEDED',
   QUANTITY_BELOW_MINIMUM: 'QUANTITY_BELOW_MINIMUM',
@@ -289,6 +297,8 @@ export interface ICartValidationResultDto {
   blockingReasons: ICartValidationIssueDto[];
   priceChangedItems: ICartValidationIssueDto[];
   cart: ICartSummaryDto;
+  validationSnapshotId?: string | null;
+  validationSnapshotExpiresAt?: string | null;
 }
 
 // ============================================================================
@@ -332,12 +342,14 @@ export interface IUpdateCartLocationRequestDto {
 /**
  * Request DTO for `POST /api/v1/cart/acknowledge-prices`.
  * Omit `itemIds` to acknowledge all current price changes in the cart.
+ * Pass `validationSnapshotId` to bind acknowledgement to the exact reviewed validation snapshot.
  *
- * @classification PROPOSED (Milestone 5B.3)
+ * @classification PROPOSED (Milestone 5B.3 & 5B.4 Hardening)
  */
 export interface IAcknowledgeCartPricesRequestDto {
   itemIds?: string[];
   expectedVersion?: number;
+  validationSnapshotId?: string;
 }
 
 /**
@@ -474,6 +486,7 @@ export const acknowledgeCartPricesSchema = z
       `itemIds must contain between 1 and ${MAX_CART_ITEMS} item IDs`,
     ).optional(),
     expectedVersion: z.number().int().min(0).optional(),
+    validationSnapshotId: commerceObjectIdSchema.optional(),
   })
   .strict();
 
@@ -742,4 +755,6 @@ export const cartValidationResultDtoSchema = z.object({
   blockingReasons: createBoundedArray(cartValidationIssueDtoSchema, 0, MAX_CART_ITEMS + 5),
   priceChangedItems: createBoundedArray(cartValidationIssueDtoSchema, 0, MAX_CART_ITEMS),
   cart: cartSummaryDtoSchema,
+  validationSnapshotId: commerceObjectIdSchema.nullable().optional(),
+  validationSnapshotExpiresAt: z.string().min(1).nullable().optional(),
 });

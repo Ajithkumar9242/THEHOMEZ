@@ -25,6 +25,9 @@ import { StorefrontClient } from '../api/storefront-client.js';
 import { useOptionalAuthContext } from '../components/auth/AuthUiContext.js';
 import {
   ACCOUNT_ROUTE_PATH,
+  ADDRESSES_ROUTE_PATH,
+  CART_ROUTE_PATH,
+  CHECKOUT_PREPARE_ROUTE_PATH,
   LOGIN_ROUTE_PATH,
   buildLoginRedirectUrl,
   sanitizeRedirectPath,
@@ -38,7 +41,7 @@ export interface ServiceAreaSummary {
   state: string;
 }
 
-export type ViewType = 'home' | 'plp' | 'pdp' | 'login' | 'account';
+export type ViewType = 'home' | 'plp' | 'pdp' | 'login' | 'account' | 'addresses' | 'cart' | 'checkout';
 
 export interface ParsedRoute {
   view: ViewType;
@@ -59,6 +62,27 @@ export function parseLocationToRoute(pathname: string, search: string): ParsedRo
   if (cleanPath === LOGIN_ROUTE_PATH) {
     return {
       view: 'login',
+      productSlug: null,
+      searchQuery: '',
+      filters: {},
+    };
+  }
+
+  if (cleanPath === CART_ROUTE_PATH) {
+    return {
+      view: 'cart',
+      productSlug: null,
+      searchQuery: '',
+      filters: {},
+    };
+  }
+  if (cleanPath === CHECKOUT_PREPARE_ROUTE_PATH) {
+    return { view: 'checkout', productSlug: null, searchQuery: '', filters: {} };
+  }
+
+  if (cleanPath === ADDRESSES_ROUTE_PATH || cleanPath === '/addresses') {
+    return {
+      view: 'addresses',
       productSlug: null,
       searchQuery: '',
       filters: {},
@@ -197,6 +221,9 @@ export interface StorefrontContextValue {
   navigateToPlp: (filters?: Partial<IStorefrontProductQuery>) => void;
   navigateToLogin: (redirectPath?: string, options?: { replace?: boolean }) => void;
   navigateToAccount: () => void;
+  navigateToAddresses: () => void;
+  navigateToCart: () => void;
+  navigateToCheckout: () => void;
   navigateToUrl: (url: string, options?: { replace?: boolean }) => void;
 }
 
@@ -264,6 +291,10 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       cleanPath === '/home' ||
       cleanPath === LOGIN_ROUTE_PATH ||
       cleanPath === ACCOUNT_ROUTE_PATH ||
+      cleanPath === ADDRESSES_ROUTE_PATH ||
+      cleanPath === CART_ROUTE_PATH ||
+      cleanPath === CHECKOUT_PREPARE_ROUTE_PATH ||
+      cleanPath === '/addresses' ||
       cleanPath === '/profile' ||
       cleanPath === '/products' ||
       cleanPath === '/catalogue' ||
@@ -392,6 +423,30 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     safeScrollToTop();
   }, []);
 
+  const navigateToAddresses = useCallback(() => {
+    setCurrentView('addresses');
+    setSelectedProductSlug(null);
+    setSearchQueryText('');
+    safeSyncHistory(ADDRESSES_ROUTE_PATH);
+    safeScrollToTop();
+  }, []);
+
+  const navigateToCart = useCallback(() => {
+    setCurrentView('cart');
+    setSelectedProductSlug(null);
+    setSearchQueryText('');
+    safeSyncHistory(CART_ROUTE_PATH);
+    safeScrollToTop();
+  }, []);
+
+  const navigateToCheckout = useCallback(() => {
+    setCurrentView('checkout');
+    setSelectedProductSlug(null);
+    setSearchQueryText('');
+    safeSyncHistory(CHECKOUT_PREPARE_ROUTE_PATH);
+    safeScrollToTop();
+  }, []);
+
   const navigateToUrl = useCallback(
     (url: string, options?: { replace?: boolean }) => {
       const safeTarget = sanitizeRedirectPath(url);
@@ -436,6 +491,9 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       navigateToPlp,
       navigateToLogin,
       navigateToAccount,
+      navigateToAddresses,
+      navigateToCart,
+      navigateToCheckout,
       navigateToUrl,
     }),
     [
@@ -460,12 +518,19 @@ export const StorefrontProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       navigateToPlp,
       navigateToLogin,
       navigateToAccount,
+      navigateToAddresses,
+      navigateToCart,
+      navigateToCheckout,
       navigateToUrl,
     ],
   );
 
   return <StorefrontContext.Provider value={value}>{children}</StorefrontContext.Provider>;
 };
+
+export function useOptionalStorefront(): StorefrontContextValue | null {
+  return useContext(StorefrontContext);
+}
 
 export function useStorefront(): StorefrontContextValue {
   const context = useContext(StorefrontContext);

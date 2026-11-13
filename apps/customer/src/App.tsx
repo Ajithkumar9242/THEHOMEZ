@@ -14,6 +14,7 @@ import React, { useEffect } from 'react';
 import type { AuthClient } from './api/auth-client.js';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { StorefrontProvider, useStorefront } from './context/StorefrontContext.js';
+import { CartProvider } from './context/CartContext.js';
 import { Header } from './components/layout/Header.js';
 import { Footer } from './components/layout/Footer.js';
 import { LocationModal } from './components/location/LocationModal.js';
@@ -25,6 +26,9 @@ import { HomeView } from './views/HomeView.js';
 import { ProductListingView } from './views/ProductListingView.js';
 import { ProductDetailView } from './views/ProductDetailView.js';
 import { CustomerAccountView } from './views/CustomerAccountView.js';
+import { CustomerAddressesView } from './views/CustomerAddressesView.js';
+import { CartView } from './views/CartView.js';
+import { CheckoutPreparationView } from './views/CheckoutPreparationView.js';
 import './styles/customer.css';
 
 export interface AppProps {
@@ -35,7 +39,7 @@ export interface AppProps {
 }
 
 const LoginRouteView: React.FC = () => {
-  const { isAuthenticated, isInitializing } = useAuth();
+  const { isAuthenticated, isInitializing, authError, clearError } = useAuth();
   const { navigateToHome, navigateToUrl } = useStorefront();
 
   const redirectTarget =
@@ -54,12 +58,28 @@ const LoginRouteView: React.FC = () => {
   }
 
   return (
-    <CustomerLoginView
-      onSuccess={() => {
-        navigateToUrl(redirectTarget, { replace: true });
-      }}
-      onBackToStorefront={navigateToHome}
-    />
+    <>
+      {authError ? (
+        <div className="thz-session-banner" role="alert" aria-live="polite">
+          <div className="thz-session-banner-inner">
+            <p className="thz-session-banner-text">
+              <strong>Session Notice:</strong> {authError.message}
+            </p>
+            <div className="thz-session-banner-actions">
+              <button type="button" className="thz-btn-secondary" onClick={clearError}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <CustomerLoginView
+        onSuccess={() => {
+          navigateToUrl(redirectTarget, { replace: true });
+        }}
+        onBackToStorefront={navigateToHome}
+      />
+    </>
   );
 };
 
@@ -115,6 +135,29 @@ const MainRouter: React.FC = () => {
           <CustomerAccountView />
         </ProtectedRoute>
       )}
+      {currentView === 'addresses' && (
+        <ProtectedRoute
+          onRedirectToLogin={(requestedPath) => {
+            navigateToLogin(requestedPath, { replace: true });
+          }}
+        >
+          <CustomerAddressesView />
+        </ProtectedRoute>
+      )}
+      {currentView === 'cart' && (
+        <ProtectedRoute
+          onRedirectToLogin={(requestedPath) => {
+            navigateToLogin(requestedPath, { replace: true });
+          }}
+        >
+          <CartView />
+        </ProtectedRoute>
+      )}
+      {currentView === 'checkout' && (
+        <ProtectedRoute onRedirectToLogin={(requestedPath) => navigateToLogin(requestedPath, { replace: true })}>
+          <CheckoutPreparationView />
+        </ProtectedRoute>
+      )}
     </main>
   );
 };
@@ -123,14 +166,16 @@ export const App: React.FC<AppProps> = ({ authClient, skipInitialRestore = false
   return (
     <AuthProvider client={authClient} skipInitialRestore={skipInitialRestore}>
       <StorefrontProvider>
-        <div className="thz-app-container">
-          <Header />
-          <SessionNoticeBanner />
-          <MainRouter />
-          <CustomerAuthModal />
-          <LocationModal />
-          <Footer />
-        </div>
+        <CartProvider>
+          <div className="thz-app-container">
+            <Header />
+            <SessionNoticeBanner />
+            <MainRouter />
+            <CustomerAuthModal />
+            <LocationModal />
+            <Footer />
+          </div>
+        </CartProvider>
       </StorefrontProvider>
     </AuthProvider>
   );

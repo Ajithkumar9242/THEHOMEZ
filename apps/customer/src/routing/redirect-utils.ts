@@ -7,6 +7,9 @@
 
 export const LOGIN_ROUTE_PATH = '/login';
 export const ACCOUNT_ROUTE_PATH = '/account';
+export const ADDRESSES_ROUTE_PATH = '/account/addresses';
+export const CART_ROUTE_PATH = '/cart';
+export const CHECKOUT_PREPARE_ROUTE_PATH = '/checkout/prepare';
 export const DEFAULT_POST_LOGIN_PATH = '/';
 
 /**

@@ -4,18 +4,28 @@
  * Implements:
  * - Discrete integer units (BAG, PIECE) vs. Metric decimal units (TONNE, KG)
  * - MOQ (minOrderQuantity) and step increment enforcement
- * - Scaled precision handling without floating-point artifacts (Decisions #28, #29)
+ * - Exact scaled BigInt arithmetic via `ExactDecimalQuantity` (zero floating-point drift)
+ * - Never silently rounds/truncates invalid user-entered quantities
  * - Mobile touch targets >= 44x44px (AC-DISCOV-23)
  */
 
 import React from 'react';
 import type { IStorefrontUnitSummary } from '@thehomez/shared-types';
+import {
+  isAtOrAboveMaximumQuantity,
+  isAtOrBelowMinimumQuantity,
+  stepExactQuantity,
+  tryFormatCanonicalQuantity,
+} from '../cart/cart-quantity.utils.js';
 
 export interface QuantityStepperProps {
   unit: IStorefrontUnitSummary;
   quantity: string;
   onChange: (newQuantity: string) => void;
   disabled?: boolean;
+  inputId?: string;
+  label?: string;
+  errorMessage?: string | null;
 }
 
 export const QuantityStepper: React.FC<QuantityStepperProps> = ({
@@ -23,64 +33,46 @@ export const QuantityStepper: React.FC<QuantityStepperProps> = ({
   quantity,
   onChange,
   disabled = false,
+  inputId = 'thz-qty-stepper-input',
+  label,
+  errorMessage,
 }) => {
   const precision = unit.quantityPrecision;
-  const factor = Math.pow(10, precision);
-
-  const parseVal = (str: string): number => {
-    const n = parseFloat(str);
-    return isNaN(n) ? parseFloat(unit.minOrderQuantity) : n;
-  };
-
-  const formatVal = (val: number): string => {
-    return precision === 0 ? Math.round(val).toString() : val.toFixed(precision);
-  };
-
-  const minVal = parseVal(unit.minOrderQuantity);
-  const maxVal = unit.maxOrderQuantity ? parseVal(unit.maxOrderQuantity) : Infinity;
-  const stepVal = parseVal(unit.stepIncrement);
-  const currentVal = parseVal(quantity);
 
   const handleDecrement = () => {
     if (disabled) return;
-    const next = Math.max(minVal, currentVal - stepVal);
-    // Precision round
-    const rounded = Math.round(next * factor) / factor;
-    onChange(formatVal(rounded));
+    onChange(stepExactQuantity(quantity, unit, -1));
   };
 
   const handleIncrement = () => {
     if (disabled) return;
-    const next = Math.min(maxVal, currentVal + stepVal);
-    const rounded = Math.round(next * factor) / factor;
-    onChange(formatVal(rounded));
+    onChange(stepExactQuantity(quantity, unit, 1));
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return;
-    const val = e.target.value;
-    onChange(val);
+    onChange(e.target.value);
   };
 
   const handleInputBlur = () => {
-    let parsed = parseVal(quantity);
-    if (parsed < minVal) parsed = minVal;
-    if (parsed > maxVal) parsed = maxVal;
-    // Align to step increment
-    const stepsFromMin = Math.round((parsed - minVal) / stepVal);
-    const stepped = minVal + stepsFromMin * stepVal;
-    const clamped = Math.min(maxVal, Math.max(minVal, stepped));
-    const rounded = Math.round(clamped * factor) / factor;
-    onChange(formatVal(rounded));
+    // Only normalize canonical padding (e.g. "2" -> "2.000") if it already conforms cleanly;
+    // never silently round/truncate invalid fractional precision or off-step entries.
+    const formatted = tryFormatCanonicalQuantity(quantity, precision);
+    if (formatted !== null && formatted !== quantity) {
+      onChange(formatted);
+    }
   };
+
+  const isMinReached = isAtOrBelowMinimumQuantity(quantity, unit);
+  const isMaxReached = isAtOrAboveMaximumQuantity(quantity, unit);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
       <label
-        htmlFor="thz-qty-stepper-input"
+        htmlFor={inputId}
         style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--thz-text-primary)' }}
       >
-        Order Quantity ({unit.unitCode}):
+        {label ?? `Order Quantity (${unit.unitCode}):`}
       </label>
 
       <div className="thz-stepper-box">
@@ -88,29 +80,31 @@ export const QuantityStepper: React.FC<QuantityStepperProps> = ({
           type="button"
           className="thz-stepper-btn"
           onClick={handleDecrement}
-          disabled={disabled || currentVal <= minVal}
+          disabled={disabled || isMinReached}
           aria-label={`Decrease quantity by ${unit.stepIncrement} ${unit.unitCode}`}
         >
           −
         </button>
 
         <input
-          id="thz-qty-stepper-input"
+          id={inputId}
           type="text"
           inputMode={precision === 0 ? 'numeric' : 'decimal'}
-          className="thz-stepper-input"
+          className={`thz-stepper-input${errorMessage ? ' error' : ''}`}
           value={quantity}
           onChange={handleInputChange}
           onBlur={handleInputBlur}
           disabled={disabled}
           aria-label={`Quantity in ${unit.unitCode}`}
+          aria-invalid={errorMessage ? 'true' : 'false'}
+          aria-describedby={errorMessage ? `${inputId}-error` : undefined}
         />
 
         <button
           type="button"
           className="thz-stepper-btn"
           onClick={handleIncrement}
-          disabled={disabled || currentVal >= maxVal}
+          disabled={disabled || isMaxReached}
           aria-label={`Increase quantity by ${unit.stepIncrement} ${unit.unitCode}`}
         >
           +
@@ -123,7 +117,14 @@ export const QuantityStepper: React.FC<QuantityStepperProps> = ({
 
       <div style={{ fontSize: '0.75rem', color: 'var(--thz-text-muted)' }}>
         Min: {unit.minOrderQuantity} {unit.unitCode} • Step: {unit.stepIncrement} {unit.unitCode}
+        {unit.maxOrderQuantity ? ` • Max: ${unit.maxOrderQuantity} ${unit.unitCode}` : ''}
       </div>
+
+      {errorMessage ? (
+        <div id={`${inputId}-error`} className="thz-form-error" role="alert">
+          {errorMessage}
+        </div>
+      ) : null}
     </div>
   );
 };

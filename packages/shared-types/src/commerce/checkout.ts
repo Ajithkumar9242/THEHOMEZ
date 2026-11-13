@@ -51,11 +51,22 @@ import {
 
 /**
  * Default validity window (in minutes) for a prepared checkout session snapshot.
+ * The current backend stores the idempotency key on that same session document,
+ * so its key claim is retained for the same bounded period (plus asynchronous
+ * MongoDB TTL cleanup lag). This is not permanent key reservation.
  */
 export const CHECKOUT_SESSION_TTL_MINUTES = 15;
 
 /**
  * Mandatory HTTP header for idempotent checkout preparation (`POST /api/v1/checkout/prepare`).
+ * While the matching session record is retained, same-key/same-payload retries
+ * replay only an active PREPARED session; different payloads and expired or
+ * superseded sessions are rejected. The current backend reports both different
+ * payload and inactive retained-claim rejection as
+ * `IDEMPOTENCY_KEY_PAYLOAD_MISMATCH`; clients should treat this as rejected key
+ * reuse. Once TTL removes the session, its key claim is removed too and a later
+ * use is a new request. 5B.4 has no side-effecting order/payment operation and
+ * does not promise permanent deduplication.
  */
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
 
@@ -105,6 +116,7 @@ export const CHECKOUT_ERROR_CODES = {
   PRICE_DRIFT_UNACKNOWLEDGED: 'PRICE_DRIFT_UNACKNOWLEDGED',
   ADDRESS_NOT_FOUND: 'ADDRESS_NOT_FOUND',
   ADDRESS_UNSERVICEABLE: 'ADDRESS_UNSERVICEABLE',
+  VALIDATION_SNAPSHOT_REQUIRED: 'VALIDATION_SNAPSHOT_REQUIRED',
 } as const;
 
 export type CheckoutErrorCode =
@@ -236,6 +248,7 @@ export interface ICheckoutSessionDto {
 export interface IPrepareCheckoutRequestDto {
   addressId: string;
   expectedCartVersion?: number;
+  validationSnapshotId?: string;
 }
 
 /**
@@ -271,6 +284,7 @@ export const prepareCheckoutSchema = z
   .object({
     addressId: commerceObjectIdSchema,
     expectedCartVersion: z.number().int().min(0).optional(),
+    validationSnapshotId: commerceObjectIdSchema.optional(),
   })
   .strict();
 

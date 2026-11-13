@@ -9,6 +9,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { useStorefront } from '../context/StorefrontContext.js';
+import { AccountNavigation } from '../components/addresses/AccountNavigation.js';
 
 function formatTimestamp(value?: Date | string): string {
   if (!value) {
@@ -42,6 +43,7 @@ export const CustomerAccountView: React.FC = () => {
     openLocationModal,
     navigateToHome,
     navigateToPlp,
+    navigateToAddresses,
   } = useStorefront();
 
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -99,6 +101,8 @@ export const CustomerAccountView: React.FC = () => {
         <span style={{ color: 'var(--thz-text-primary)', fontWeight: 600 }}>My Account</span>
       </nav>
 
+      <AccountNavigation activeTab="overview" />
+
       <div className="thz-account-header">
         <div>
           <span className="thz-account-eyebrow">Verified Customer Session</span>
@@ -106,7 +110,7 @@ export const CustomerAccountView: React.FC = () => {
             Customer Account
           </h1>
           <p className="thz-account-subtitle">
-            Manage your authenticated session, account status, and delivery site localization.
+            Manage your authenticated session, saved delivery addresses, and site localization.
           </p>
         </div>
 
@@ -250,6 +254,24 @@ export const CustomerAccountView: React.FC = () => {
           <div className="thz-account-card-actions">
             <button type="button" className="thz-btn-secondary" onClick={openLocationModal}>
               {pincode ? 'Change Delivery PIN' : 'Select Delivery PIN'}
+            </button>
+          </div>
+        </div>
+
+        <div className="thz-account-card">
+          <div className="thz-account-card-header">
+            <h2 className="thz-account-card-title">Delivery Site Addresses</h2>
+            <span className="thz-account-segment-pill">Address Book</span>
+          </div>
+
+          <p className="thz-account-card-copy">
+            Save construction site and delivery addresses, assign on-site receiver contacts, add
+            heavy-vehicle access notes, and verify PIN serviceability.
+          </p>
+
+          <div className="thz-account-card-actions">
+            <button type="button" className="thz-btn-primary" onClick={navigateToAddresses}>
+              Manage Saved Addresses
             </button>
           </div>
         </div>

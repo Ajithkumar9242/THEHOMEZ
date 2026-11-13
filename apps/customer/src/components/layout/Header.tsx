@@ -10,6 +10,7 @@
 
 import React, { useState } from 'react';
 import { useStorefront } from '../../context/StorefrontContext.js';
+import { useOptionalCart } from '../../context/CartContext.js';
 import { useOptionalAuthContext } from '../auth/AuthUiContext.js';
 import { formatDisplayPhone } from '../auth/auth-utils.js';
 
@@ -24,9 +25,13 @@ export const Header: React.FC = () => {
     navigateToSearch,
     navigateToPlp,
     navigateToAccount,
+    navigateToAddresses,
+    navigateToCart,
   } = useStorefront();
 
   const auth = useOptionalAuthContext();
+  const cartCtx = useOptionalCart();
+  const cartItemCount = auth?.isAuthenticated && cartCtx?.cart ? cartCtx.cart.totalItemCount : null;
 
   const [searchInput, setSearchInput] = useState('');
 
@@ -146,6 +151,24 @@ export const Header: React.FC = () => {
             <span>{locationPillText}</span>
           </button>
 
+          {/* Shopping Cart Entry */}
+          <button
+            type="button"
+            className="thz-cart-header-btn"
+            onClick={navigateToCart}
+            aria-label={
+              cartItemCount !== null
+                ? `Shopping Cart (${cartItemCount} ${cartItemCount === 1 ? 'item' : 'items'})`
+                : 'Shopping Cart'
+            }
+          >
+            <span aria-hidden="true">🛒</span>
+            <span>Cart</span>
+            {cartItemCount !== null && cartItemCount > 0 ? (
+              <span className="thz-cart-count-badge">{cartItemCount}</span>
+            ) : null}
+          </button>
+
           {/* Customer Authentication Controls */}
           {auth?.isAuthenticated && auth.user ? (
             <div className="thz-auth-header-group" role="group" aria-label="Customer account">
@@ -162,6 +185,15 @@ export const Header: React.FC = () => {
               >
                 <span aria-hidden="true">👤</span>
                 <span>{formattedUserPhone}</span>
+              </button>
+              <button
+                type="button"
+                className="thz-account-pill"
+                onClick={navigateToAddresses}
+                aria-label="Saved Delivery Addresses"
+              >
+                <span aria-hidden="true">📋</span>
+                <span>Addresses</span>
               </button>
               <button
                 type="button"

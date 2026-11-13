@@ -16,3 +16,6 @@ export * from './catalog/exact-decimal-quantity.js';
 export * from './catalog/storefront-discovery.service.js';
 export * from './pricing/index.js';
 export * from './partner-availability/index.js';
+export * from './customer-address/index.js';
+export * from './cart/index.js';
+export * from './checkout-preparation.service.js';
