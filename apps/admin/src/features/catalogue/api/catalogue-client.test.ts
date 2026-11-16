@@ -86,3 +86,107 @@ describe('read-only catalogue clients', () => {
     expect(new ApiError('x', 401, 'UNAUTHORIZED').status).toBe(401);
   });
 });
+
+describe('administrative product mutation client', () => {
+  it('calls POST /products with JSON body on create', async () => {
+    const mockProduct = { id: 'p1', title: 'Cement', brand: 'UltraTech', status: 'DRAFT' };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ product: mockProduct })));
+
+    const dto = {
+      title: 'Cement',
+      brand: 'UltraTech',
+      categoryId: '507f1f77bcf86cd799439011',
+      subcategoryId: '507f1f77bcf86cd799439012',
+    };
+    const result = await productClient.create(dto);
+    expect(result).toEqual(mockProduct);
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/products',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify(dto),
+      }),
+    );
+  });
+
+  it('calls PATCH /products/:id with JSON body on update', async () => {
+    const mockProduct = { id: 'p1', title: 'Updated Title' };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ product: mockProduct })));
+
+    const dto = { title: 'Updated Title' };
+    const result = await productClient.update('p1', dto);
+    expect(result).toEqual(mockProduct);
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/products/p1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify(dto),
+      }),
+    );
+  });
+
+  it('calls lifecycle endpoints (publish, deactivate, archive, deleteDraft) correctly', async () => {
+    const mockProduct = { id: 'p1', title: 'Product' };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(response({ product: { ...mockProduct, status: 'ACTIVE' } }))
+        .mockResolvedValueOnce(response({ product: { ...mockProduct, status: 'INACTIVE' } }))
+        .mockResolvedValueOnce(response({ product: { ...mockProduct, status: 'ARCHIVED' } }))
+        .mockResolvedValueOnce(response({ message: 'Draft product deleted successfully' })),
+    );
+
+    const published = await productClient.publish('p1');
+    expect(published.status).toBe('ACTIVE');
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/products/p1/publish',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    const deactivated = await productClient.deactivate('p1');
+    expect(deactivated.status).toBe('INACTIVE');
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/products/p1/deactivate',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    const archived = await productClient.archive('p1');
+    expect(archived.status).toBe('ARCHIVED');
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      '/api/v1/products/p1/archive',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    const deleted = await productClient.deleteDraft('p1');
+    expect(deleted.message).toBe('Draft product deleted successfully');
+    expect(fetch).toHaveBeenNthCalledWith(
+      4,
+      '/api/v1/products/p1',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('preserves error codes on failed mutations', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response(
+            { error: { code: 'CANNOT_PUBLISH_UNPRICED_PRODUCT', message: 'Missing B2C pricing' } },
+            400,
+          ),
+        ),
+    );
+
+    await expect(productClient.publish('p1')).rejects.toMatchObject({
+      status: 400,
+      code: 'CANNOT_PUBLISH_UNPRICED_PRODUCT',
+      message: 'Missing B2C pricing',
+    });
+  });
+});

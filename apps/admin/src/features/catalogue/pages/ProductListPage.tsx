@@ -12,7 +12,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   PermissionCode,
@@ -26,11 +26,18 @@ import { productClient } from '../api/product-client.js';
 import { getCategories, getUnitLabels } from '../api/catalogue-lookups.js';
 import { CatalogueError } from '../components/CatalogueStates.js';
 import { ProductStatus as ProductStatusTag } from '../components/ProductStatus.js';
+import { ProductFormDrawer } from '../components/ProductFormDrawer.js';
+import {
+  ProductLifecycleModal,
+  type ProductLifecycleAction,
+} from '../components/ProductLifecycleModal.js';
 
 const statuses: ProductState[] = ['DRAFT', 'ACTIVE', 'INACTIVE', 'ARCHIVED'];
 export function ProductListPage() {
   const { user } = useAuth();
   const canRead = user?.permissions.includes(PermissionCode.CATALOG_READ) ?? false;
+  const canWrite = user?.permissions.includes(PermissionCode.CATALOG_WRITE) ?? false;
+  const canPublish = user?.permissions.includes(PermissionCode.CATALOG_PUBLISH) ?? false;
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const page = Math.max(1, Number(params.get('page')) || 1);
@@ -65,6 +72,13 @@ export function ProductListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [attempt, setAttempt] = useState(0);
+
+  // Management UI State
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
+  const [selectedProduct, setSelectedProduct] = useState<IProduct | null>(null);
+  const [lifecycleAction, setLifecycleAction] = useState<ProductLifecycleAction | null>(null);
+  const [lifecycleModalOpen, setLifecycleModalOpen] = useState(false);
 
   useEffect(() => {
     if (!canRead) {
@@ -158,10 +172,26 @@ export function ProductListPage() {
           <Typography.Text className="eyebrow">CATALOGUE</Typography.Text>
           <Typography.Title level={1}>Products</Typography.Title>
           <Typography.Paragraph type="secondary">
-            Read-only product and variant catalogue inspection.
+            Master product and variant catalogue governance.
           </Typography.Paragraph>
         </div>
-        <Tag>{total.toLocaleString()} products</Tag>
+        <Space>
+          {canWrite && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setSelectedProduct(null);
+                setDrawerMode('create');
+                setDrawerOpen(true);
+              }}
+              aria-label="Create product button"
+            >
+              Create Product
+            </Button>
+          )}
+          <Tag>{total.toLocaleString()} products</Tag>
+        </Space>
       </div>
       <Card variant="borderless" className="catalogue-card">
         <div className="product-filters">
@@ -240,7 +270,7 @@ export function ProductListPage() {
           <Table<IProduct>
             rowKey="id"
             dataSource={rows}
-            scroll={{ x: 900 }}
+            scroll={{ x: 1000 }}
             pagination={{
               current: page,
               pageSize: limit,
@@ -310,6 +340,89 @@ export function ProductListPage() {
                 key: 'created',
                 render: (date?: string) => (date ? new Date(date).toLocaleDateString() : '—'),
               },
+              ...(canWrite || canPublish
+                ? [
+                    {
+                      title: 'Actions',
+                      key: 'actions',
+                      width: 200,
+                      render: (_: unknown, record: IProduct) => (
+                        <Space onClick={(e) => e.stopPropagation()} wrap size="small">
+                          {canWrite && record.status !== 'ARCHIVED' && (
+                            <Button
+                              size="small"
+                              onClick={() => {
+                                setSelectedProduct(record);
+                                setDrawerMode('edit');
+                                setDrawerOpen(true);
+                              }}
+                              aria-label={`Edit ${record.title}`}
+                            >
+                              Edit
+                            </Button>
+                          )}
+                          {canPublish &&
+                            record.status !== 'ACTIVE' &&
+                            record.status !== 'ARCHIVED' && (
+                              <Button
+                                size="small"
+                                type="primary"
+                                onClick={() => {
+                                  setSelectedProduct(record);
+                                  setLifecycleAction('publish');
+                                  setLifecycleModalOpen(true);
+                                }}
+                                aria-label={`Publish ${record.title}`}
+                              >
+                                Publish
+                              </Button>
+                            )}
+                          {canWrite && record.status === 'ACTIVE' && (
+                            <Button
+                              size="small"
+                              onClick={() => {
+                                setSelectedProduct(record);
+                                setLifecycleAction('deactivate');
+                                setLifecycleModalOpen(true);
+                              }}
+                              aria-label={`Deactivate ${record.title}`}
+                            >
+                              Deactivate
+                            </Button>
+                          )}
+                          {canWrite && record.status !== 'ARCHIVED' && (
+                            <Button
+                              size="small"
+                              danger
+                              onClick={() => {
+                                setSelectedProduct(record);
+                                setLifecycleAction('archive');
+                                setLifecycleModalOpen(true);
+                              }}
+                              aria-label={`Archive ${record.title}`}
+                            >
+                              Archive
+                            </Button>
+                          )}
+                          {canWrite && record.status === 'DRAFT' && record.publishedAt === null && (
+                            <Button
+                              size="small"
+                              danger
+                              onClick={() => {
+                                setSelectedProduct(record);
+                                setLifecycleAction('delete');
+                                setLifecycleModalOpen(true);
+                              }}
+                              aria-label={`Delete draft ${record.title}`}
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </Space>
+                      ),
+                    },
+                  ]
+                : []),
             ]}
           />
         )}
@@ -324,6 +437,32 @@ export function ProductListPage() {
           </Button>
         )}
       </Card>
+
+      <ProductFormDrawer
+        open={drawerOpen}
+        mode={drawerMode}
+        product={selectedProduct}
+        onClose={() => {
+          setDrawerOpen(false);
+          setSelectedProduct(null);
+        }}
+        onSuccess={() => {
+          setAttempt((n) => n + 1);
+        }}
+      />
+
+      <ProductLifecycleModal
+        open={lifecycleModalOpen}
+        action={lifecycleAction}
+        product={selectedProduct}
+        onClose={() => {
+          setLifecycleModalOpen(false);
+          setSelectedProduct(null);
+        }}
+        onSuccess={() => {
+          setAttempt((n) => n + 1);
+        }}
+      />
     </div>
   );
 }

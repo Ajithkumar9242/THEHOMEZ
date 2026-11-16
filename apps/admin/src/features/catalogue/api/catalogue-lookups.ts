@@ -18,7 +18,11 @@ export async function getCategories(
   };
 }
 
+export async function getUnits(signal?: AbortSignal): Promise<IUnit[]> {
+  return apiRequest<IUnit[]>('/units?activeOnly=false', { method: 'GET', signal });
+}
+
 export async function getUnitLabels(signal?: AbortSignal): Promise<Map<string, string>> {
-  const units = await apiRequest<IUnit[]>('/units?activeOnly=false', { method: 'GET', signal });
+  const units = await getUnits(signal);
   return new Map(units.map((unit) => [unit.code, `${unit.name} (${unit.symbol})`]));
 }
