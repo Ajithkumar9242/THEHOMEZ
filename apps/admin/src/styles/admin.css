@@ -253,6 +253,22 @@ input {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.category-tree-node-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+  min-width: 0;
+}
+.category-tree-actions {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+.category-tree-actions .ant-btn {
+  padding-inline: 4px;
+}
 .category-detail-empty {
   min-height: 300px;
   display: grid;

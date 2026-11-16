@@ -2,10 +2,19 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, Empty, Result, Skeleton, Space, Typography } from 'antd';
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { ICategoryDetailsResponse } from '@thehomez/shared-types';
+import type {
+  ICategory,
+  ICategoryDetailsResponse,
+  ICategorySubcategoryItem,
+  ICategoryTreeItem,
+} from '@thehomez/shared-types';
+import { PermissionCode } from '@thehomez/shared-types';
 import { ApiError } from '../../../services/api-client.js';
+import { useAuth } from '../../../providers/AuthProvider.js';
 import { categoryClient } from '../api/category-client.js';
 import { CategoryDetails } from '../components/CategoryDetails.js';
+import { CategoryFormModal } from '../components/CategoryFormModal.js';
+import { CategoryDeleteModal } from '../components/CategoryDeleteModal.js';
 
 function describeError(error: unknown): { status: number; message: string; permission: boolean } {
   if (error instanceof ApiError) {
@@ -46,6 +55,8 @@ function describeError(error: unknown): { status: number; message: string; permi
 }
 
 export function CategoryDetailPage() {
+  const { user } = useAuth();
+  const canWrite = user?.permissions.includes(PermissionCode.CATALOG_WRITE) ?? false;
   const { slug = '' } = useParams();
   const [searchParams] = useSearchParams();
   const includeInactive = searchParams.get('includeInactive') === 'true';
@@ -54,6 +65,19 @@ export function CategoryDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [attempt, setAttempt] = useState(0);
+
+  // Management modals state
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [formModalMode, setFormModalMode] = useState<'create' | 'edit'>('create');
+  const [selectedCategory, setSelectedCategory] = useState<
+    ICategory | ICategoryTreeItem | ICategorySubcategoryItem | null
+  >(null);
+  const [initialParentId, setInitialParentId] = useState<string | null>(null);
+  const [hasChildren, setHasChildren] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<{ id: string; name: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -72,6 +96,45 @@ export function CategoryDetailPage() {
       });
     return () => controller.abort();
   }, [slug, includeInactive, attempt]);
+
+  const handleOpenEditCurrent = () => {
+    if (!details) return;
+    const hasKids = details.category.level === 0 && (details.subcategories?.length ?? 0) > 0;
+    setSelectedCategory(details.category);
+    setInitialParentId(details.category.parentId || null);
+    setHasChildren(hasKids);
+    setFormModalMode('edit');
+    setFormModalOpen(true);
+  };
+
+  const handleOpenAddSubcategory = () => {
+    if (!details) return;
+    setSelectedCategory(null);
+    setInitialParentId(details.category.id);
+    setHasChildren(false);
+    setFormModalMode('create');
+    setFormModalOpen(true);
+  };
+
+  const handleOpenDeleteCurrent = () => {
+    if (!details) return;
+    setCategoryToDelete({ id: details.category.id, name: details.category.name });
+    setDeleteModalOpen(true);
+  };
+
+  const handleOpenEditChild = (child: ICategorySubcategoryItem) => {
+    if (!details) return;
+    setSelectedCategory(child);
+    setInitialParentId(details.category.id);
+    setHasChildren(false);
+    setFormModalMode('edit');
+    setFormModalOpen(true);
+  };
+
+  const handleOpenDeleteChild = (child: ICategorySubcategoryItem) => {
+    setCategoryToDelete({ id: child.id, name: child.name });
+    setDeleteModalOpen(true);
+  };
 
   const errorView = error ? describeError(error) : null;
   return (
@@ -137,9 +200,66 @@ export function CategoryDetailPage() {
           />
         )
       ) : details ? (
-        <CategoryDetails details={details} />
+        <CategoryDetails
+          details={details}
+          canWrite={canWrite}
+          onEdit={handleOpenEditCurrent}
+          onDelete={handleOpenDeleteCurrent}
+          onAddSubcategory={handleOpenAddSubcategory}
+          onEditChild={handleOpenEditChild}
+          onDeleteChild={handleOpenDeleteChild}
+        />
       ) : (
         <Empty description="No category details returned" />
+      )}
+
+      {canWrite && details && formModalOpen && (
+        <CategoryFormModal
+          open={formModalOpen}
+          mode={formModalMode}
+          category={selectedCategory}
+          initialParentId={initialParentId}
+          rootCategories={
+            details.parent
+              ? [{ id: details.parent.id, name: details.parent.name }]
+              : details.category.level === 0
+                ? [{ id: details.category.id, name: details.category.name }]
+                : []
+          }
+          hasChildren={hasChildren}
+          onClose={() => setFormModalOpen(false)}
+          onSuccess={(updated) => {
+            if (selectedCategory && selectedCategory.id === details.category.id) {
+              if (updated.slug !== details.category.slug) {
+                navigate(
+                  `/catalogue/categories/${encodeURIComponent(updated.slug)}${includeInactive ? '?includeInactive=true' : ''}`,
+                  { replace: true },
+                );
+              } else {
+                setAttempt((n) => n + 1);
+              }
+            } else {
+              setAttempt((n) => n + 1);
+            }
+          }}
+        />
+      )}
+      {canWrite && details && deleteModalOpen && (
+        <CategoryDeleteModal
+          open={deleteModalOpen}
+          category={categoryToDelete}
+          onClose={() => {
+            setDeleteModalOpen(false);
+            setCategoryToDelete(null);
+          }}
+          onSuccess={() => {
+            if (categoryToDelete?.id === details.category.id) {
+              navigate(`/catalogue/categories${includeInactive ? '?includeInactive=true' : ''}`);
+            } else {
+              setAttempt((n) => n + 1);
+            }
+          }}
+        />
       )}
     </div>
   );

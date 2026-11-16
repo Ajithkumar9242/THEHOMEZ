@@ -11,14 +11,20 @@ import {
   Space,
   Typography,
 } from 'antd';
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { ICategoryTreeItem } from '@thehomez/shared-types';
+import type {
+  ICategory,
+  ICategorySubcategoryItem,
+  ICategoryTreeItem,
+} from '@thehomez/shared-types';
 import { PermissionCode } from '@thehomez/shared-types';
 import { ApiError } from '../../../services/api-client.js';
 import { useAuth } from '../../../providers/AuthProvider.js';
 import { categoryClient } from '../api/category-client.js';
 import { CategoryTree } from '../components/CategoryTree.js';
+import { CategoryFormModal } from '../components/CategoryFormModal.js';
+import { CategoryDeleteModal } from '../components/CategoryDeleteModal.js';
 
 function errorDescription(error: unknown): { title: string; message: string; permission: boolean } {
   if (error instanceof ApiError) {
@@ -58,6 +64,7 @@ function errorDescription(error: unknown): { title: string; message: string; per
 export function CategoryBrowserPage() {
   const { user } = useAuth();
   const canRead = user?.permissions.includes(PermissionCode.CATALOG_READ) ?? false;
+  const canWrite = user?.permissions.includes(PermissionCode.CATALOG_WRITE) ?? false;
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const includeInactive = searchParams.get('includeInactive') === 'true';
@@ -66,6 +73,19 @@ export function CategoryBrowserPage() {
   const [error, setError] = useState<unknown>(null);
   const [search, setSearch] = useState('');
   const [attempt, setAttempt] = useState(0);
+
+  // Management modal state
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [formModalMode, setFormModalMode] = useState<'create' | 'edit'>('create');
+  const [selectedCategory, setSelectedCategory] = useState<
+    ICategory | ICategoryTreeItem | ICategorySubcategoryItem | null
+  >(null);
+  const [initialParentId, setInitialParentId] = useState<string | null>(null);
+  const [hasChildren, setHasChildren] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<{ id: string; name: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!canRead) {
@@ -103,6 +123,37 @@ export function CategoryBrowserPage() {
   const currentError = error ? errorDescription(error) : null;
   const permissionDenied = currentError?.permission || !canRead;
 
+  const handleOpenCreateRoot = () => {
+    setSelectedCategory(null);
+    setInitialParentId(null);
+    setHasChildren(false);
+    setFormModalMode('create');
+    setFormModalOpen(true);
+  };
+
+  const handleOpenAddSubcategory = (root: ICategoryTreeItem) => {
+    setSelectedCategory(null);
+    setInitialParentId(root.id);
+    setHasChildren(false);
+    setFormModalMode('create');
+    setFormModalOpen(true);
+  };
+
+  const handleOpenEdit = (cat: ICategoryTreeItem | ICategorySubcategoryItem) => {
+    const root = categories.find((r) => r.id === cat.id);
+    const kidsExist = Boolean(root && root.subcategories && root.subcategories.length > 0);
+    setSelectedCategory(cat);
+    setInitialParentId(cat.parentId || null);
+    setHasChildren(kidsExist);
+    setFormModalMode('edit');
+    setFormModalOpen(true);
+  };
+
+  const handleOpenDelete = (cat: ICategoryTreeItem | ICategorySubcategoryItem) => {
+    setCategoryToDelete({ id: cat.id, name: cat.name });
+    setDeleteModalOpen(true);
+  };
+
   return (
     <div className="category-page">
       <div className="category-page-heading">
@@ -110,22 +161,31 @@ export function CategoryBrowserPage() {
           <Typography.Text className="eyebrow">CATALOGUE</Typography.Text>
           <Typography.Title level={1}>Categories</Typography.Title>
           <Typography.Paragraph type="secondary">
-            Read-only visibility into the persisted two-level category hierarchy.
+            {canWrite
+              ? 'Manage root categories, subcategories, display order and active status.'
+              : 'Read-only visibility into the persisted two-level category hierarchy.'}
           </Typography.Paragraph>
         </div>
-        {canRead && (
-          <Checkbox
-            checked={includeInactive}
-            onChange={(event) => {
-              const next = new URLSearchParams(searchParams);
-              if (event.target.checked) next.set('includeInactive', 'true');
-              else next.delete('includeInactive');
-              setSearchParams(next);
-            }}
-          >
-            Include inactive
-          </Checkbox>
-        )}
+        <Space>
+          {canWrite && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreateRoot}>
+              Add category
+            </Button>
+          )}
+          {canRead && (
+            <Checkbox
+              checked={includeInactive}
+              onChange={(event) => {
+                const next = new URLSearchParams(searchParams);
+                if (event.target.checked) next.set('includeInactive', 'true');
+                else next.delete('includeInactive');
+                setSearchParams(next);
+              }}
+            >
+              Include inactive
+            </Checkbox>
+          )}
+        </Space>
       </div>
 
       {permissionDenied ? (
@@ -186,6 +246,10 @@ export function CategoryBrowserPage() {
                 <CategoryTree
                   categories={categories}
                   search={search}
+                  canWrite={canWrite}
+                  onAddSubcategory={handleOpenAddSubcategory}
+                  onEdit={handleOpenEdit}
+                  onDelete={handleOpenDelete}
                   onSelect={(id) => {
                     const selected = categoryById.get(id);
                     if (selected)
@@ -201,6 +265,34 @@ export function CategoryBrowserPage() {
             <Empty description="Select a category to view its details" />
           </Card>
         </div>
+      )}
+
+      {canWrite && formModalOpen && (
+        <CategoryFormModal
+          open={formModalOpen}
+          mode={formModalMode}
+          category={selectedCategory}
+          initialParentId={initialParentId}
+          rootCategories={categories.map((c) => ({ id: c.id, name: c.name }))}
+          hasChildren={hasChildren}
+          onClose={() => setFormModalOpen(false)}
+          onSuccess={() => {
+            setAttempt((n) => n + 1);
+          }}
+        />
+      )}
+      {canWrite && deleteModalOpen && (
+        <CategoryDeleteModal
+          open={deleteModalOpen}
+          category={categoryToDelete}
+          onClose={() => {
+            setDeleteModalOpen(false);
+            setCategoryToDelete(null);
+          }}
+          onSuccess={() => {
+            setAttempt((n) => n + 1);
+          }}
+        />
       )}
     </div>
   );

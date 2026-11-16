@@ -231,8 +231,39 @@ describe('PricingInspection', () => {
     renderPage();
     expect(await screen.findByText(/Unable to reach the API/)).toBeInTheDocument();
     const alerts = await screen.findAllByRole('alert');
-    fireEvent.click(within(alerts[alerts.length - 1]).getByRole('button', { name: 'Retry' }));
+    fireEvent.click(within(alerts[alerts.length - 1]!).getByRole('button', { name: /retry/i }));
     expect(await screen.findByText('₹1,234.56')).toBeInTheDocument();
+  });
+
+  it('withholds stale pricing data during context changes and replaces loading on error', async () => {
+    vi.mocked(pricingClient.getProductPricing).mockResolvedValue([record]);
+    let resolveSecond: ((value: IProductPricing[]) => void) | null = null;
+    const secondPromise = new Promise<IProductPricing[]>((resolve) => {
+      resolveSecond = resolve;
+    });
+
+    const { rerender, container } = render(
+      <MemoryRouter>
+        <PricingInspection productId="p1" />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('₹1,234.56')).toBeInTheDocument();
+
+    vi.mocked(pricingClient.getProductPricing).mockReturnValueOnce(secondPromise);
+    rerender(
+      <MemoryRouter>
+        <PricingInspection productId="p2" />
+      </MemoryRouter>,
+    );
+
+    // Stale data for p1 must be immediately withheld, loading skeleton shown
+    expect(screen.queryByText('₹1,234.56')).not.toBeInTheDocument();
+    expect(container.querySelector('.ant-skeleton')).toBeInTheDocument();
+
+    // When p2 resolves, new data appears
+    resolveSecond!([{ ...record, id: 'price-2', productId: 'p2', b2cPricePaise: 500000 }]);
+    expect(await screen.findByText('₹5,000.00')).toBeInTheDocument();
   });
 
   it.each([
@@ -245,6 +276,6 @@ describe('PricingInspection', () => {
     renderPage();
     expect(await screen.findByText(message)).toBeInTheDocument();
     const alerts = await screen.findAllByRole('alert');
-    expect(within(alerts[alerts.length - 1]).getByText(message)).toBeInTheDocument();
+    expect(within(alerts[alerts.length - 1]!).getByText(message)).toBeInTheDocument();
   });
 });

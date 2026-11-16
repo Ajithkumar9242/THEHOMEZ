@@ -202,4 +202,98 @@ describe('categoryClient', () => {
       categoryClient.getTree({ includeInactive: false, signal: controller.signal }),
     ).rejects.toMatchObject({ name: 'AbortError' });
   });
+
+  it('creates a category via POST /api/v1/categories with auth and returns created category', async () => {
+    await establishMemorySession();
+    const created = {
+      id: 'cat-new',
+      slug: 'structural-steel',
+      name: 'Structural Steel',
+      parentId: null,
+      level: 0,
+      displayOrder: 2,
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(json({ success: true, data: { category: created } }, 201)),
+    );
+
+    const payload = {
+      name: 'Structural Steel',
+      slug: 'structural-steel',
+      parentId: null,
+      displayOrder: 2,
+      isActive: true,
+    };
+    const result = await categoryClient.create(payload);
+    expect(result.category.id).toBe('cat-new');
+    expect(result.category.name).toBe('Structural Steel');
+    const [callUrl, callInit] = vi.mocked(fetch).mock.calls[0]!;
+    expect(callUrl).toBe('/api/v1/categories');
+    expect(callInit?.method).toBe('POST');
+    expect(callInit?.body).toBe(JSON.stringify(payload));
+    expect((callInit?.headers as Headers).get('authorization')).toBe('Bearer memory-token');
+    expect((callInit?.headers as Headers).get('content-type')).toBe('application/json');
+  });
+
+  it('updates a category via PATCH /api/v1/categories/:id', async () => {
+    await establishMemorySession();
+    const updated = {
+      id: 'cat-1',
+      slug: 'updated-slug',
+      name: 'Updated Name',
+      parentId: null,
+      level: 0,
+      displayOrder: 5,
+      isActive: false,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(json({ success: true, data: { category: updated } }, 200)),
+    );
+
+    const patchPayload = { name: 'Updated Name', displayOrder: 5, isActive: false };
+    const result = await categoryClient.update('cat-1', patchPayload);
+    expect(result.category.name).toBe('Updated Name');
+    const [callUrl, callInit] = vi.mocked(fetch).mock.calls[0]!;
+    expect(callUrl).toBe('/api/v1/categories/cat-1');
+    expect(callInit?.method).toBe('PATCH');
+    expect(callInit?.body).toBe(JSON.stringify(patchPayload));
+    expect((callInit?.headers as Headers).get('authorization')).toBe('Bearer memory-token');
+    expect((callInit?.headers as Headers).get('content-type')).toBe('application/json');
+  });
+
+  it('deletes a category via DELETE /api/v1/categories/:id', async () => {
+    await establishMemorySession();
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          json({ success: true, data: { message: 'Category deleted successfully' } }, 200),
+        ),
+    );
+
+    const result = await categoryClient.delete('cat-1');
+    expect(result.message).toBe('Category deleted successfully');
+    const [callUrl, callInit] = vi.mocked(fetch).mock.calls[0]!;
+    expect(callUrl).toBe('/api/v1/categories/cat-1');
+    expect(callInit?.method).toBe('DELETE');
+    expect((callInit?.headers as Headers).get('authorization')).toBe('Bearer memory-token');
+  });
+});
+
+describe('slugify utility', () => {
+  it('converts titles into clean kebab-case URL slugs', async () => {
+    const { slugify } = await import('./category-client.js');
+    expect(slugify('Building Materials')).toBe('building-materials');
+    expect(slugify('  TMT Bars & Rods! ')).toBe('tmt-bars-rods');
+    expect(slugify('Pumps---Valves')).toBe('pumps-valves');
+    expect(slugify('CEMENT')).toBe('cement');
+  });
 });

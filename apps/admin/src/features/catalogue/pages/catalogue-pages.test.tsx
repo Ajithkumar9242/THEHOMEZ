@@ -126,7 +126,7 @@ describe('catalogue pages', () => {
       totalPages: 2,
     });
     routes('/catalogue/products');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Red Brick' })).toBeInTheDocument();
+    expect(await screen.findByText('Red Brick')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('textbox', { name: 'Search products' }), {
       target: { value: 'brick' },
     });
@@ -154,7 +154,7 @@ describe('catalogue pages', () => {
     });
     vi.mocked(getUnitLabels).mockResolvedValue(new Map([['PIECE', 'Piece (pc)']]));
     routes('/catalogue/products/p1');
-    expect(await screen.findByText('Red Brick')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Red Brick' })).toBeInTheDocument();
     expect(screen.getByText('Materials')).toBeInTheDocument();
     expect(screen.getByText('color')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /view variants/i })).toBeInTheDocument();
@@ -167,13 +167,13 @@ describe('catalogue pages', () => {
     vi.mocked(useAuth).mockReturnValue(auth());
     const withoutPricing = routes('/catalogue/products/p1');
     expect(await screen.findByRole('heading', { level: 1, name: 'Red Brick' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Inspect pricing' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /inspect pricing/i })).not.toBeInTheDocument();
     withoutPricing.unmount();
     vi.mocked(useAuth).mockReturnValue(
       auth([PermissionCode.CATALOG_READ, PermissionCode.PRICING_READ]),
     );
     routes('/catalogue/products/p1');
-    expect(await screen.findByRole('button', { name: 'Inspect pricing' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /inspect pricing/i })).toBeInTheDocument();
   });
   it('shows loading, empty and retry states for product lists', async () => {
     vi.mocked(useAuth).mockReturnValue(auth());
