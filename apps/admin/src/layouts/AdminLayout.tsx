@@ -23,6 +23,8 @@ const { Header, Sider, Content } = Layout;
 const modules = [
   { key: '/', label: 'Dashboard', icon: <DashboardOutlined />, enabled: true },
   { key: '/catalogue/categories', label: 'Catalogue', icon: <AppstoreOutlined /> },
+  { key: '/catalogue/products', label: 'Products', icon: <AppstoreOutlined /> },
+  { key: '/catalogue/units', label: 'Units', icon: <AppstoreOutlined /> },
   { key: '/service-areas', label: 'Service Areas', icon: <BuildOutlined /> },
   { key: '/customers', label: 'Customers', icon: <TeamOutlined /> },
   { key: '/partners', label: 'Partners', icon: <ShopOutlined /> },
@@ -45,16 +47,20 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     (item) =>
       location.pathname === item.key ||
       (item.key === '/catalogue/categories' &&
-        location.pathname.startsWith('/catalogue/categories/')),
+        location.pathname.startsWith('/catalogue/categories/')) ||
+      (item.key === '/catalogue/products' && location.pathname.startsWith('/catalogue/products')) ||
+      (item.key === '/catalogue/units' && location.pathname.startsWith('/catalogue/units/')) ||
+      (item.key === '/service-areas' && location.pathname.startsWith('/service-areas/')),
   );
   const breadcrumbItems = useMemo(
     () => [{ title: 'Admin' }, { title: active?.label || 'Workspace' }],
     [active],
   );
-  const visibleModules = modules.filter(
-    (item) =>
-      item.key !== '/catalogue/categories' ||
-      user?.permissions.includes(PermissionCode.CATALOG_READ),
+  const visibleModules = modules.filter((item) =>
+    item.key === '/catalogue/categories' || item.key === '/catalogue/products'
+      ? user?.permissions.includes(PermissionCode.CATALOG_READ)
+      : item.key !== '/service-areas' ||
+        user?.permissions.includes(PermissionCode.SERVICE_AREA_READ),
   );
 
   return (
@@ -83,13 +89,24 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           selectedKeys={[active?.key || location.pathname]}
           onClick={({ key }) => {
             const item = modules.find((module) => module.key === key);
-            if (item?.enabled || item?.key === '/catalogue/categories') navigate(item.key);
+            if (
+              item?.enabled ||
+              item?.key === '/catalogue/categories' ||
+              item?.key === '/catalogue/products' ||
+              item?.key === '/catalogue/units' ||
+              item?.key === '/service-areas'
+            )
+              navigate(item.key);
           }}
           items={visibleModules.map((item) => ({
             key: item.key,
             icon: item.icon,
             label:
-              item.enabled || item.key === '/catalogue/categories' ? (
+              item.enabled ||
+              item.key === '/catalogue/categories' ||
+              item.key === '/catalogue/products' ||
+              item.key === '/catalogue/units' ||
+              item.key === '/service-areas' ? (
                 item.label
               ) : (
                 <span>
@@ -97,7 +114,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                   <small className="nav-status">In development</small>
                 </span>
               ),
-            disabled: !item.enabled && item.key !== '/catalogue/categories',
+            disabled:
+              !item.enabled &&
+              item.key !== '/catalogue/categories' &&
+              item.key !== '/catalogue/products' &&
+              item.key !== '/catalogue/units' &&
+              item.key !== '/service-areas',
           }))}
         />
         {!collapsed && (

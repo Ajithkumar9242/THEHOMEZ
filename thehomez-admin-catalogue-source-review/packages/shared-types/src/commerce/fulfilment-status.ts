@@ -1,0 +1,17 @@
+/**
+ * Suggested Vendor Fulfilment Unit (Sub-Order) Lifecycle States
+ * Defined in SRS Section 8.2 and Section 5.13 (FR-FUL-005)
+ */
+export enum FulfilmentStatus {
+  PENDING_ASSIGNMENT = 'PENDING_ASSIGNMENT',
+  ASSIGNED = 'ASSIGNED',
+  ACCEPTED = 'ACCEPTED',
+  REJECTED = 'REJECTED',
+  PREPARING = 'PREPARING',
+  READY_FOR_DISPATCH = 'READY_FOR_DISPATCH',
+  DISPATCHED = 'DISPATCHED',
+  DELIVERED = 'DELIVERED',
+  FAILED_DELIVERY = 'FAILED_DELIVERY',
+  CANCELLED = 'CANCELLED',
+  RETURNED = 'RETURNED',
+}
