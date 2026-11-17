@@ -1,4 +1,9 @@
-import type { IServiceArea } from '@thehomez/shared-types';
+import type {
+  ICreateServiceAreaDto,
+  IServiceArea,
+  IServiceAreaPartnerItem,
+  IUpdateServiceAreaDto,
+} from '@thehomez/shared-types';
 import { apiRequest } from '../../../services/api-client.js';
 
 export interface ServiceAreaListResponse {
@@ -32,6 +37,39 @@ export const serviceAreaClient = {
 
   get(id: string, options: { signal?: AbortSignal } = {}): Promise<IServiceArea> {
     return apiRequest(`/service-areas/${encodeURIComponent(id)}`, {
+      method: 'GET',
+      signal: options.signal,
+    });
+  },
+
+  create(
+    dto: ICreateServiceAreaDto,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<IServiceArea> {
+    return apiRequest('/service-areas', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      signal: options.signal,
+    });
+  },
+
+  update(
+    id: string,
+    dto: IUpdateServiceAreaDto,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<IServiceArea> {
+    return apiRequest(`/service-areas/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+      signal: options.signal,
+    });
+  },
+
+  getPartners(
+    id: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<IServiceAreaPartnerItem[]> {
+    return apiRequest(`/service-areas/${encodeURIComponent(id)}/partners`, {
       method: 'GET',
       signal: options.signal,
     });

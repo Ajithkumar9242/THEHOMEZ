@@ -190,3 +190,120 @@ describe('administrative product mutation client', () => {
     });
   });
 });
+
+describe('administrative variant mutation client', () => {
+  it('calls POST /products/:productId/variants with JSON body on create', async () => {
+    const mockVariant = {
+      id: 'v1',
+      productId: 'p1',
+      title: '12mm Bar',
+      status: 'DRAFT',
+      attributes: { diameter: '12mm' },
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ variant: mockVariant }, 201)));
+
+    const dto = {
+      title: '12mm Bar',
+      attributes: { diameter: '12mm' },
+    };
+    const result = await variantClient.create('p1', dto);
+    expect(result).toEqual(mockVariant);
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/products/p1/variants',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify(dto),
+      }),
+    );
+  });
+
+  it('calls PATCH /products/:productId/variants/:variantId with JSON body on update', async () => {
+    const mockVariant = {
+      id: 'v1',
+      productId: 'p1',
+      title: 'Updated 12mm Bar',
+      status: 'DRAFT',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ variant: mockVariant })));
+
+    const dto = { title: 'Updated 12mm Bar' };
+    const result = await variantClient.update('p1', 'v1', dto);
+    expect(result).toEqual(mockVariant);
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/products/p1/variants/v1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify(dto),
+      }),
+    );
+  });
+
+  it('calls POST deactivate and archive endpoints correctly', async () => {
+    const mockVariant = { id: 'v1', productId: 'p1', title: '12mm Bar' };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(response({ variant: { ...mockVariant, status: 'INACTIVE' } }))
+        .mockResolvedValueOnce(response({ variant: { ...mockVariant, status: 'ARCHIVED' } })),
+    );
+
+    const deactivated = await variantClient.deactivate('p1', 'v1');
+    expect(deactivated.status).toBe('INACTIVE');
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/products/p1/variants/v1/deactivate',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    const archived = await variantClient.archive('p1', 'v1');
+    expect(archived.status).toBe('ARCHIVED');
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/products/p1/variants/v1/archive',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('propagates variant-specific error codes correctly', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response(
+            {
+              error: {
+                code: 'CANNOT_ACTIVATE_UNPRICED_VARIANT',
+                message: 'Active global pricing required',
+              },
+            },
+            400,
+          ),
+        )
+        .mockResolvedValueOnce(
+          response(
+            {
+              error: {
+                code: 'DUPLICATE_VARIANT_ATTRIBUTES',
+                message: 'Duplicate attributes found',
+              },
+            },
+            409,
+          ),
+        ),
+    );
+
+    await expect(variantClient.update('p1', 'v1', { status: 'ACTIVE' })).rejects.toMatchObject({
+      status: 400,
+      code: 'CANNOT_ACTIVATE_UNPRICED_VARIANT',
+    });
+
+    await expect(
+      variantClient.create('p1', { title: 'Dup', attributes: { size: '10mm' } }),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'DUPLICATE_VARIANT_ATTRIBUTES',
+    });
+  });
+});

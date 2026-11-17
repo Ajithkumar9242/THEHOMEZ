@@ -22,6 +22,7 @@ import { storefrontRouter } from './routes/storefront.routes.js';
 import { createCustomerAddressRouter } from './routes/customer-address.routes.js';
 import { createCartRouter } from './routes/cart.routes.js';
 import { createCheckoutRouter } from './routes/checkout.routes.js';
+import { createAdminCustomerRouter } from './routes/admin-customer.routes.js';
 
 /**
  * Creates and configures the Express application.
@@ -97,6 +98,7 @@ export function createApp(): Application {
   // Partner Product Availability management & Storefront Resolution
   app.use(`${config.apiPrefix}/partner/availability`, partnerAvailabilityRouter);
   app.use(`${config.apiPrefix}/admin/partners`, adminPartnerAvailabilityRouter);
+  app.use(`${config.apiPrefix}/admin/customers`, createAdminCustomerRouter());
 
   // Consumer Storefront Discovery & Browsing
   app.use(`${config.apiPrefix}/storefront`, storefrontRouter);

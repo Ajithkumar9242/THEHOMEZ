@@ -25,6 +25,7 @@ export * from './commerce/fulfilment-status.js';
 export * from './commerce/payment-status.js';
 export * from './commerce/delivery-mode.js';
 export * from './commerce/address.js';
+export * from './commerce/customer.js';
 export * from './commerce/cart.js';
 export * from './commerce/checkout.js';
 

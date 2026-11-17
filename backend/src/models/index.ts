@@ -17,3 +17,4 @@ export * from './customer-address.model.js';
 export * from './cart.model.js';
 export * from './cart-validation-snapshot.model.js';
 export * from './checkout-session.model.js';
+export * from './customer-audit-log.model.js';

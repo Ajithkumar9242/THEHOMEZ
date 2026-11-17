@@ -17,7 +17,13 @@ import { ServiceAreaDetailPage } from './ServiceAreaDetailPage.js';
 
 vi.mock('../../../providers/AuthProvider.js', () => ({ useAuth: vi.fn() }));
 vi.mock('../api/service-area-client.js', () => ({
-  serviceAreaClient: { list: vi.fn(), get: vi.fn() },
+  serviceAreaClient: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    getPartners: vi.fn(),
+  },
 }));
 
 const staff: IAuthUser = {
@@ -228,8 +234,8 @@ describe('service-area browser pages', () => {
     expect(screen.queryByText('Service Areas')).not.toBeInTheDocument();
   });
 
-  it('exposes no service-area mutation controls', async () => {
-    vi.mocked(useAuth).mockReturnValue(auth());
+  it('exposes no service-area mutation controls for read-only staff', async () => {
+    vi.mocked(useAuth).mockReturnValue(auth([PermissionCode.SERVICE_AREA_READ]));
     vi.mocked(serviceAreaClient.list).mockResolvedValue({
       items: [area],
       total: 1,
@@ -243,6 +249,132 @@ describe('service-area browser pages', () => {
       screen.queryByRole('button', {
         name: /create|edit|delete|activate|deactivate|add pin|remove pin/i,
       }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders Create Service Area button and opens drawer when user has SERVICE_AREA_WRITE', async () => {
+    vi.mocked(useAuth).mockReturnValue(
+      auth([PermissionCode.SERVICE_AREA_READ, PermissionCode.SERVICE_AREA_WRITE]),
+    );
+    vi.mocked(serviceAreaClient.list).mockResolvedValue({
+      items: [area],
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
+    renderPage('/service-areas');
+    await screen.findByText('BLR-CENTRAL');
+
+    const createBtn = screen.getByRole('button', { name: /create service area/i });
+    expect(createBtn).toBeInTheDocument();
+
+    fireEvent.click(createBtn);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByLabelText('Service area code')).toBeInTheDocument();
+  });
+
+  it('renders Edit Service Area button on detail page when user has SERVICE_AREA_WRITE', async () => {
+    vi.mocked(useAuth).mockReturnValue(
+      auth([PermissionCode.SERVICE_AREA_READ, PermissionCode.SERVICE_AREA_WRITE]),
+    );
+    vi.mocked(serviceAreaClient.get).mockResolvedValue(area);
+
+    renderPage('/service-areas/area-1');
+    await screen.findByText('BLR-CENTRAL');
+
+    const editBtn = screen.getByRole('button', { name: `Edit ${area.name}` });
+    expect(editBtn).toBeInTheDocument();
+
+    fireEvent.click(editBtn);
+    expect(await screen.findByText(`Edit Service Area: ${area.name}`)).toBeInTheDocument();
+    expect(screen.getByLabelText('Service area code disabled')).toBeDisabled();
+  });
+
+  it('hides Edit Service Area button on detail page when user lacks SERVICE_AREA_WRITE', async () => {
+    vi.mocked(useAuth).mockReturnValue(auth([PermissionCode.SERVICE_AREA_READ]));
+    vi.mocked(serviceAreaClient.get).mockResolvedValue(area);
+
+    renderPage('/service-areas/area-1');
+    await screen.findByText('BLR-CENTRAL');
+
+    expect(screen.queryByRole('button', { name: /edit service area/i })).not.toBeInTheDocument();
+  });
+
+  it('renders Deactivate Service Area button for active hub and executes deactivation', async () => {
+    vi.mocked(useAuth).mockReturnValue(
+      auth([PermissionCode.SERVICE_AREA_READ, PermissionCode.SERVICE_AREA_WRITE]),
+    );
+    vi.mocked(serviceAreaClient.get).mockResolvedValue(area);
+    const deactivatedArea = { ...area, isActive: false };
+    vi.mocked(serviceAreaClient.update).mockResolvedValueOnce(deactivatedArea);
+
+    renderPage('/service-areas/area-1');
+    await screen.findByText('BLR-CENTRAL');
+
+    const deactBtn = screen.getByRole('button', { name: `Deactivate ${area.name}` });
+    expect(deactBtn).toBeInTheDocument();
+
+    fireEvent.click(deactBtn);
+
+    // Modal opens
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Immediate Downstream Operational Impact')).toBeInTheDocument();
+
+    // Type code to confirm
+    const codeInput = screen.getByLabelText('Confirm service area code input');
+    fireEvent.change(codeInput, { target: { value: 'BLR-CENTRAL' } });
+
+    const confirmBtn = screen.getByRole('button', { name: /Confirm deactivation button/i });
+    expect(confirmBtn).not.toBeDisabled();
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(serviceAreaClient.update).toHaveBeenCalledWith('area-1', { isActive: false });
+    });
+  });
+
+  it('renders Activate Service Area button for inactive hub and executes activation', async () => {
+    vi.mocked(useAuth).mockReturnValue(
+      auth([PermissionCode.SERVICE_AREA_READ, PermissionCode.SERVICE_AREA_WRITE]),
+    );
+    const inactiveArea = { ...area, isActive: false };
+    vi.mocked(serviceAreaClient.get).mockResolvedValue(inactiveArea);
+    const activatedArea = { ...inactiveArea, isActive: true };
+    vi.mocked(serviceAreaClient.update).mockResolvedValueOnce(activatedArea);
+
+    renderPage('/service-areas/area-1');
+    await screen.findByText('BLR-CENTRAL');
+
+    const actBtn = screen.getByRole('button', { name: `Activate ${area.name}` });
+    expect(actBtn).toBeInTheDocument();
+
+    fireEvent.click(actBtn);
+
+    // Modal opens
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('PIN Coverage Verification')).toBeInTheDocument();
+
+    const confirmBtn = screen.getByRole('button', { name: /Confirm activation button/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(serviceAreaClient.update).toHaveBeenCalledWith('area-1', { isActive: true });
+    });
+  });
+
+  it('hides lifecycle mutation buttons on detail page when user lacks SERVICE_AREA_WRITE', async () => {
+    vi.mocked(useAuth).mockReturnValue(auth([PermissionCode.SERVICE_AREA_READ]));
+    vi.mocked(serviceAreaClient.get).mockResolvedValue(area);
+
+    renderPage('/service-areas/area-1');
+    await screen.findByText('BLR-CENTRAL');
+
+    expect(
+      screen.queryByRole('button', { name: /deactivate service area/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /activate service area/i }),
     ).not.toBeInTheDocument();
   });
 });

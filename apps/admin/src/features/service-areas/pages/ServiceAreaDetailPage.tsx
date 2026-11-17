@@ -10,14 +10,22 @@ import {
   Table,
   Tag,
   Typography,
+  message,
 } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import {
+  ArrowLeftOutlined,
+  CheckCircleOutlined,
+  EditOutlined,
+  PoweroffOutlined,
+} from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PermissionCode, type IServiceArea } from '@thehomez/shared-types';
 import { useAuth } from '../../../providers/AuthProvider.js';
 import { serviceAreaClient } from '../api/service-area-client.js';
 import { ServiceAreaError } from '../components/ServiceAreaError.js';
 import { ServiceAreaStatus } from '../components/ServiceAreaStatus.js';
+import { ServiceAreaFormDrawer } from '../components/ServiceAreaFormDrawer.js';
+import { ServiceAreaLifecycleModal } from '../components/ServiceAreaLifecycleModal.js';
 
 function formatDate(value?: string): string {
   if (!value) return '—';
@@ -29,11 +37,17 @@ export function ServiceAreaDetailPage() {
   const { serviceAreaId = '' } = useParams();
   const { user } = useAuth();
   const canRead = user?.permissions.includes(PermissionCode.SERVICE_AREA_READ) ?? false;
+  const canWrite = user?.permissions.includes(PermissionCode.SERVICE_AREA_WRITE) ?? false;
   const navigate = useNavigate();
   const [area, setArea] = useState<IServiceArea | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [attempt, setAttempt] = useState(0);
+  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  const [lifecycleModalOpen, setLifecycleModalOpen] = useState(false);
+  const [lifecycleModalMode, setLifecycleModalMode] = useState<'activate' | 'deactivate'>(
+    'deactivate',
+  );
 
   useEffect(() => {
     if (!canRead) {
@@ -78,7 +92,47 @@ export function ServiceAreaDetailPage() {
           <Typography.Text className="eyebrow">SERVICE AREA DETAILS</Typography.Text>
           <Typography.Title level={1}>{area?.name || 'Service Area'}</Typography.Title>
         </div>
-        {area && <ServiceAreaStatus isActive={area.isActive} />}
+        {area && (
+          <Space>
+            {canWrite && (
+              <>
+                {area.isActive ? (
+                  <Button
+                    danger
+                    icon={<PoweroffOutlined />}
+                    onClick={() => {
+                      setLifecycleModalMode('deactivate');
+                      setLifecycleModalOpen(true);
+                    }}
+                    aria-label={`Deactivate ${area.name}`}
+                  >
+                    Deactivate Service Area
+                  </Button>
+                ) : (
+                  <Button
+                    type="primary"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => {
+                      setLifecycleModalMode('activate');
+                      setLifecycleModalOpen(true);
+                    }}
+                    aria-label={`Activate ${area.name}`}
+                  >
+                    Activate Service Area
+                  </Button>
+                )}
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => setEditDrawerOpen(true)}
+                  aria-label={`Edit ${area.name}`}
+                >
+                  Edit Service Area
+                </Button>
+              </>
+            )}
+            <ServiceAreaStatus isActive={area.isActive} />
+          </Space>
+        )}
       </div>
       {loading ? (
         <Skeleton active paragraph={{ rows: 6 }} />
@@ -162,6 +216,36 @@ export function ServiceAreaDetailPage() {
         </Space>
       ) : (
         <Empty description="No service area details returned" />
+      )}
+
+      {area && (
+        <ServiceAreaFormDrawer
+          open={editDrawerOpen}
+          mode="edit"
+          serviceArea={area}
+          onClose={() => setEditDrawerOpen(false)}
+          onSuccess={(updated) => {
+            message.success(`Service area "${updated.name}" updated successfully`);
+            setArea(updated);
+            setAttempt((current) => current + 1);
+          }}
+        />
+      )}
+
+      {area && (
+        <ServiceAreaLifecycleModal
+          open={lifecycleModalOpen}
+          mode={lifecycleModalMode}
+          serviceArea={area}
+          onClose={() => setLifecycleModalOpen(false)}
+          onSuccess={(updated) => {
+            message.success(
+              `Service area "${updated.name}" ${updated.isActive ? 'activated' : 'deactivated'} successfully`,
+            );
+            setArea(updated);
+            setAttempt((current) => current + 1);
+          }}
+        />
       )}
     </div>
   );

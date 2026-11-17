@@ -11,8 +11,9 @@ import {
   Table,
   Tag,
   Typography,
+  message,
 } from 'antd';
-import { ClearOutlined, FilterOutlined } from '@ant-design/icons';
+import { ClearOutlined, FilterOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { PermissionCode, type IServiceArea } from '@thehomez/shared-types';
 import { useAuth } from '../../../providers/AuthProvider.js';
@@ -20,6 +21,7 @@ import { serviceAreaClient } from '../api/service-area-client.js';
 import type { ServiceAreaListQuery } from '../api/service-area-client.js';
 import { ServiceAreaError } from '../components/ServiceAreaError.js';
 import { ServiceAreaStatus } from '../components/ServiceAreaStatus.js';
+import { ServiceAreaFormDrawer } from '../components/ServiceAreaFormDrawer.js';
 
 interface AreaFilters {
   city?: string;
@@ -40,6 +42,7 @@ function formatDate(value?: string): string {
 export function ServiceAreaListPage() {
   const { user } = useAuth();
   const canRead = user?.permissions.includes(PermissionCode.SERVICE_AREA_READ) ?? false;
+  const canWrite = user?.permissions.includes(PermissionCode.SERVICE_AREA_WRITE) ?? false;
   const navigate = useNavigate();
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
@@ -54,6 +57,7 @@ export function ServiceAreaListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [attempt, setAttempt] = useState(0);
+  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
 
   useEffect(() => {
     if (!canRead) {
@@ -127,10 +131,22 @@ export function ServiceAreaListPage() {
           <Typography.Text className="eyebrow">GEOGRAPHY</Typography.Text>
           <Typography.Title level={1}>Service Areas</Typography.Title>
           <Typography.Paragraph type="secondary">
-            Read-only view of configured areas and their PIN-code coverage.
+            Configured areas and their PIN-code coverage.
           </Typography.Paragraph>
         </div>
-        <Tag>{total.toLocaleString()} service areas</Tag>
+        <Space>
+          {canWrite && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setCreateDrawerOpen(true)}
+              aria-label="Create service area button"
+            >
+              Create Service Area
+            </Button>
+          )}
+          <Tag>{total.toLocaleString()} service areas</Tag>
+        </Space>
       </div>
       <Card variant="borderless" className="catalogue-card">
         <div className="service-area-filters">
@@ -270,6 +286,16 @@ export function ServiceAreaListPage() {
           </Space>
         )}
       </Card>
+
+      <ServiceAreaFormDrawer
+        open={createDrawerOpen}
+        mode="create"
+        onClose={() => setCreateDrawerOpen(false)}
+        onSuccess={(created) => {
+          message.success(`Service area "${created.name}" created successfully`);
+          setAttempt((current) => current + 1);
+        }}
+      />
     </div>
   );
 }

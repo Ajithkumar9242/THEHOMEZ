@@ -514,3 +514,36 @@ export async function enforceOptionalCustomerPrincipal(
 
   await verifyAndAttachCustomerPrincipal(req, res, next);
 }
+
+/**
+ * Staff-Only Administrative Guard Middleware
+ *
+ * Enforces that only authenticated principals with userType === UserType.STAFF
+ * are permitted to access administrative oversight routes.
+ * Rejects non-STAFF principals (e.g. PARTNER, CUSTOMER) with HTTP 403 FORBIDDEN.
+ */
+export function staffOnlyGuard(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user) {
+    sendSecurityError(
+      req,
+      res,
+      401,
+      'UNAUTHENTICATED',
+      'Authentication required prior to administrative authorization',
+    );
+    return;
+  }
+
+  if (req.user.userType !== UserType.STAFF) {
+    sendSecurityError(
+      req,
+      res,
+      403,
+      'FORBIDDEN',
+      'Access denied: administrative routes are restricted to staff principals',
+    );
+    return;
+  }
+
+  next();
+}
