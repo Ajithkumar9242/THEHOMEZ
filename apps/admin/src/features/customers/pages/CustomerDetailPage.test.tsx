@@ -49,6 +49,28 @@ const staffWithoutCustomerRead: IAuthUser = {
   createdAt: '2026-01-01T00:00:00.000Z',
 };
 
+const staffWithSuspendPerm: IAuthUser = {
+  id: 'staff-customer-suspender',
+  phone: '+919999999998',
+  email: 'suspender@thehomez.com',
+  userType: UserType.STAFF,
+  status: UserStatus.ACTIVE,
+  roles: ['CUSTOMER_SUPPORT_LEAD'],
+  permissions: [PermissionCode.CUSTOMER_READ, PermissionCode.CUSTOMER_SUSPEND],
+  createdAt: '2026-01-01T00:00:00.000Z',
+};
+
+const staffWithB2bVerifyPerm: IAuthUser = {
+  id: 'staff-b2b-verifier',
+  phone: '+919999999997',
+  email: 'b2b-verifier@thehomez.com',
+  userType: UserType.STAFF,
+  status: UserStatus.ACTIVE,
+  roles: ['B2B_ONBOARDING_SPECIALIST'],
+  permissions: [PermissionCode.CUSTOMER_READ, PermissionCode.B2B_VERIFY],
+  createdAt: '2026-01-01T00:00:00.000Z',
+};
+
 const mockCustomerDetail1: IAdminCustomerDetailDto = {
   id: '507f1f77bcf86cd799439011',
   phone: '+919876543210',
@@ -519,6 +541,116 @@ describe('Admin Customer Detail View (Stage C-5)', () => {
       expect(
         await screen.findByText('Customer Identity & Account Information'),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('6. Stage C-6: Page-Level Action Permissions & Security Guards', () => {
+    it('does not render account status action buttons when staff lacks CUSTOMER_SUSPEND permission', async () => {
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(mockCustomerDetail1);
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439011', staffWithCustomerRead);
+
+      expect(
+        await screen.findByText('Customer Identity & Account Information'),
+      ).toBeInTheDocument();
+
+      expect(screen.queryByRole('button', { name: /suspend customer account/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /reactivate customer account/i })).toBeNull();
+    });
+
+    it('renders Suspend Account button for ACTIVE customer when staff has CUSTOMER_SUSPEND', async () => {
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(mockCustomerDetail1);
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439011', staffWithSuspendPerm);
+
+      expect(
+        await screen.findByRole('button', { name: /suspend customer account/i }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /reactivate customer account/i })).toBeNull();
+    });
+
+    it('renders Reactivate Account button for SUSPENDED customer when staff has CUSTOMER_SUSPEND', async () => {
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(
+        mockCustomerDetailEmptyAddresses,
+      );
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439012', staffWithSuspendPerm);
+
+      expect(
+        await screen.findByRole('button', { name: /reactivate customer account/i }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /suspend customer account/i })).toBeNull();
+    });
+
+    it('does not render account status action buttons for PENDING_VERIFICATION customer', async () => {
+      const pendingCustomer: IAdminCustomerDetailDto = {
+        ...mockCustomerDetail1,
+        id: '507f1f77bcf86cd799439013',
+        status: UserStatus.PENDING_VERIFICATION,
+      };
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(pendingCustomer);
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439013', staffWithSuspendPerm);
+
+      expect(
+        await screen.findByText('Customer Identity & Account Information'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /suspend customer account/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /reactivate customer account/i })).toBeNull();
+    });
+
+    it('does not render B2B action controls when staff lacks B2B_VERIFY permission', async () => {
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(mockCustomerDetail1);
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439011', staffWithCustomerRead);
+
+      expect(
+        await screen.findByText('Customer Identity & Account Information'),
+      ).toBeInTheDocument();
+
+      expect(screen.queryByRole('button', { name: /verify b2b/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /update b2b/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /revoke b2b/i })).toBeNull();
+    });
+
+    it('renders Verify B2B Contractor button for B2C customer when staff has B2B_VERIFY', async () => {
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(
+        mockCustomerDetailEmptyAddresses,
+      );
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439012', staffWithB2bVerifyPerm);
+
+      expect(
+        await screen.findByRole('button', { name: /verify b2b contractor/i }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /revoke b2b/i })).toBeNull();
+    });
+
+    it('renders Update B2B Details and Revoke B2B Status for B2B customer when staff has B2B_VERIFY', async () => {
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(mockCustomerDetail1);
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439011', staffWithB2bVerifyPerm);
+
+      expect(
+        await screen.findByRole('button', { name: /update b2b details/i }),
+      ).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: /revoke b2b status/i })).toBeInTheDocument();
+    });
+
+    it('safely filters out credential and token metadata fields from display', async () => {
+      const customerWithSensitiveData: IAdminCustomerDetailDto = {
+        ...mockCustomerDetail1,
+        metadata: {
+          companyName: 'Legitimate Contractor Co',
+          passwordHash: '$2b$10$supersecretneverexpose',
+          token: 'sensitive-jwt-token-here',
+          refreshToken: 'refresh-token-here',
+          signupSource: 'Regional Trade Expo 2026',
+        },
+      };
+
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(customerWithSensitiveData);
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439011', staffWithCustomerRead);
+
+      expect(await screen.findByText('Regional Trade Expo 2026')).toBeInTheDocument();
+
+      // Assert that credentials are NEVER rendered in the document
+      expect(screen.queryByText('$2b$10$supersecretneverexpose')).toBeNull();
+      expect(screen.queryByText('sensitive-jwt-token-here')).toBeNull();
+      expect(screen.queryByText('refresh-token-here')).toBeNull();
     });
   });
 });

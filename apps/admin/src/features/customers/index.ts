@@ -5,6 +5,9 @@ export { CustomerDirectoryFilters } from './components/CustomerDirectoryFilters.
 export { CustomerStatusBadge } from './components/CustomerStatusBadge.js';
 export { CustomerSegmentBadge } from './components/CustomerSegmentBadge.js';
 export { CustomerAddressList } from './components/CustomerAddressList.js';
+export { CustomerStatusActionModal } from './components/CustomerStatusActionModal.js';
+export { CustomerB2bModal } from './components/CustomerB2bModal.js';
+export type { CustomerB2bModalMode } from './components/CustomerB2bModal.js';
 export { CustomerError } from './components/CustomerError.js';
 export { useCustomerDirectory } from './hooks/useCustomerDirectory.js';
 export { useCustomerDetail } from './hooks/useCustomerDetail.js';

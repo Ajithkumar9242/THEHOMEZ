@@ -59,5 +59,7 @@ export function useCustomerDetail(
     loading,
     error,
     retry,
+    setCustomer,
+    refetch: retry,
   };
 }
