@@ -19,6 +19,8 @@ import {
   ProductPricingDetailPage,
   VariantPricingDetailPage,
 } from '../features/catalogue/pages/PricingDetailPage.js';
+import { CustomerDirectoryPage } from '../features/customers/pages/CustomerDirectoryPage.js';
+import { CustomerDetailPage } from '../features/customers/pages/CustomerDetailPage.js';
 
 function CategoryLayout() {
   return (
@@ -107,6 +109,12 @@ function ShellRoutes() {
         <Route element={<CategoryLayout />}>
           <Route path="/service-areas" element={<ServiceAreaListPage />} />
           <Route path="/service-areas/:serviceAreaId" element={<ServiceAreaDetailPage />} />
+        </Route>
+      </Route>
+      <Route element={<ProtectedRoute permission={PermissionCode.CUSTOMER_READ} />}>
+        <Route element={<CategoryLayout />}>
+          <Route path="/customers" element={<CustomerDirectoryPage />} />
+          <Route path="/customers/:id" element={<CustomerDetailPage />} />
         </Route>
       </Route>
       <Route element={<ProtectedRoute permission={PermissionCode.CATALOG_READ} />}>

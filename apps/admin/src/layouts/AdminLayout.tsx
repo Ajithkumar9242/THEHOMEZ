@@ -50,18 +50,25 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         location.pathname.startsWith('/catalogue/categories/')) ||
       (item.key === '/catalogue/products' && location.pathname.startsWith('/catalogue/products')) ||
       (item.key === '/catalogue/units' && location.pathname.startsWith('/catalogue/units/')) ||
-      (item.key === '/service-areas' && location.pathname.startsWith('/service-areas/')),
+      (item.key === '/service-areas' && location.pathname.startsWith('/service-areas/')) ||
+      (item.key === '/customers' && location.pathname.startsWith('/customers')),
   );
   const breadcrumbItems = useMemo(
     () => [{ title: 'Admin' }, { title: active?.label || 'Workspace' }],
     [active],
   );
-  const visibleModules = modules.filter((item) =>
-    item.key === '/catalogue/categories' || item.key === '/catalogue/products'
-      ? user?.permissions.includes(PermissionCode.CATALOG_READ)
-      : item.key !== '/service-areas' ||
-        user?.permissions.includes(PermissionCode.SERVICE_AREA_READ),
-  );
+  const visibleModules = modules.filter((item) => {
+    if (item.key === '/catalogue/categories' || item.key === '/catalogue/products') {
+      return user?.permissions.includes(PermissionCode.CATALOG_READ);
+    }
+    if (item.key === '/service-areas') {
+      return user?.permissions.includes(PermissionCode.SERVICE_AREA_READ);
+    }
+    if (item.key === '/customers') {
+      return user?.permissions.includes(PermissionCode.CUSTOMER_READ);
+    }
+    return true;
+  });
 
   return (
     <Layout className="admin-frame">
@@ -94,19 +101,24 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               item?.key === '/catalogue/categories' ||
               item?.key === '/catalogue/products' ||
               item?.key === '/catalogue/units' ||
-              item?.key === '/service-areas'
+              item?.key === '/service-areas' ||
+              item?.key === '/customers'
             )
               navigate(item.key);
           }}
-          items={visibleModules.map((item) => ({
-            key: item.key,
-            icon: item.icon,
-            label:
+          items={visibleModules.map((item) => {
+            const isOperational =
               item.enabled ||
               item.key === '/catalogue/categories' ||
               item.key === '/catalogue/products' ||
               item.key === '/catalogue/units' ||
-              item.key === '/service-areas' ? (
+              item.key === '/service-areas' ||
+              item.key === '/customers';
+
+            return {
+              key: item.key,
+              icon: item.icon,
+              label: isOperational ? (
                 item.label
               ) : (
                 <span>
@@ -114,13 +126,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                   <small className="nav-status">In development</small>
                 </span>
               ),
-            disabled:
-              !item.enabled &&
-              item.key !== '/catalogue/categories' &&
-              item.key !== '/catalogue/products' &&
-              item.key !== '/catalogue/units' &&
-              item.key !== '/service-areas',
-          }))}
+              disabled: !isOperational,
+            };
+          })}
         />
         {!collapsed && (
           <div className="sidebar-footnote">

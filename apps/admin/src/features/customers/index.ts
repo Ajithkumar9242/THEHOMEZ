@@ -1,0 +1,12 @@
+export { CustomerDirectoryPage } from './pages/CustomerDirectoryPage.js';
+export { CustomerDetailPage } from './pages/CustomerDetailPage.js';
+export { CustomerDirectoryTable } from './components/CustomerDirectoryTable.js';
+export { CustomerDirectoryFilters } from './components/CustomerDirectoryFilters.js';
+export { CustomerStatusBadge } from './components/CustomerStatusBadge.js';
+export { CustomerSegmentBadge } from './components/CustomerSegmentBadge.js';
+export { CustomerAddressList } from './components/CustomerAddressList.js';
+export { CustomerError } from './components/CustomerError.js';
+export { useCustomerDirectory } from './hooks/useCustomerDirectory.js';
+export { useCustomerDetail } from './hooks/useCustomerDetail.js';
+export { customerClient } from './api/customer-client.js';
+export type { CustomerListQuery, CustomerRequestOptions } from './api/customer-client.js';
