@@ -21,6 +21,10 @@ import {
 } from '../features/catalogue/pages/PricingDetailPage.js';
 import { CustomerDirectoryPage } from '../features/customers/pages/CustomerDirectoryPage.js';
 import { CustomerDetailPage } from '../features/customers/pages/CustomerDetailPage.js';
+import { PartnerDirectoryPage } from '../features/partners/pages/PartnerDirectoryPage.js';
+import { PartnerDetailPage } from '../features/partners/pages/PartnerDetailPage.js';
+import { PartnerApplicationDirectoryPage } from '../features/partner-applications/pages/PartnerApplicationDirectoryPage.js';
+import { PartnerApplicationDetailPage } from '../features/partner-applications/pages/PartnerApplicationDetailPage.js';
 
 function CategoryLayout() {
   return (
@@ -115,6 +119,17 @@ function ShellRoutes() {
         <Route element={<CategoryLayout />}>
           <Route path="/customers" element={<CustomerDirectoryPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
+        </Route>
+      </Route>
+      <Route element={<ProtectedRoute permission={PermissionCode.PARTNER_READ} />}>
+        <Route element={<CategoryLayout />}>
+          <Route path="/partners" element={<PartnerDirectoryPage />} />
+          <Route path="/partners/:partnerId" element={<PartnerDetailPage />} />
+          <Route path="/partner-applications" element={<PartnerApplicationDirectoryPage />} />
+          <Route
+            path="/partner-applications/:applicationId"
+            element={<PartnerApplicationDetailPage />}
+          />
         </Route>
       </Route>
       <Route element={<ProtectedRoute permission={PermissionCode.CATALOG_READ} />}>

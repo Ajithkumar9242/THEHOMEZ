@@ -1,8 +1,10 @@
 import crypto from 'node:crypto';
+import { Types } from 'mongoose';
 import { UserType, UserStatus, type IOtpRequestResponse } from '@thehomez/shared-types';
 import { PhoneOtpModel } from '../../models/phone-otp.model.js';
 import { OtpLockoutModel } from '../../models/otp-lockout.model.js';
 import { UserModel, type IUserDocument } from '../../models/user.model.js';
+import { PartnerModel } from '../../models/partner.model.js';
 import { getConfig } from '../../config/env.js';
 import { logger } from '../../logger/logger.js';
 import { normalizePhoneNumber } from '../phone.utils.js';
@@ -69,11 +71,7 @@ export class OtpService {
   /**
    * Checks active temporary phone lockout and atomically clears expired lockout tracking.
    */
-  private async checkAndClearLockout(
-    phone: string,
-    userType: UserType,
-    now: Date,
-  ): Promise<void> {
+  private async checkAndClearLockout(phone: string, userType: UserType, now: Date): Promise<void> {
     const lockout = await OtpLockoutModel.findOne({ phone, userType });
     if (!lockout) {
       return;
@@ -120,7 +118,10 @@ export class OtpService {
       );
     } catch (err: unknown) {
       const isDuplicateKey =
-        typeof err === 'object' && err !== null && 'code' in err && (err as { code?: number }).code === 11000;
+        typeof err === 'object' &&
+        err !== null &&
+        'code' in err &&
+        (err as { code?: number }).code === 11000;
       if (isDuplicateKey) {
         return await OtpLockoutModel.findOneAndUpdate(
           { phone, userType },
@@ -421,6 +422,28 @@ export class OtpService {
         'ACCOUNT_NOT_ACTIVE',
         403,
       );
+    }
+
+    // Partner organization active status verification
+    if (user.userType === UserType.PARTNER) {
+      if (!user.partnerId || !Types.ObjectId.isValid(user.partnerId.toString())) {
+        throw new OtpError(
+          'Partner identity context missing or invalid',
+          'PARTNER_CONTEXT_REQUIRED',
+          403,
+        );
+      }
+      const partner = await PartnerModel.findById(user.partnerId);
+      if (!partner) {
+        throw new OtpError('Associated partner organisation not found', 'PARTNER_NOT_FOUND', 403);
+      }
+      if (partner.status !== 'ACTIVE') {
+        throw new OtpError(
+          `Partner organisation is ${partner.status.toLowerCase()}. Access denied`,
+          'PARTNER_NOT_ACTIVE',
+          403,
+        );
+      }
     }
 
     // Update lastLoginAt

@@ -375,7 +375,7 @@ export function CustomerDetailPage() {
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <Typography.Text type="secondary">
                   This customer is currently classified as a retail (B2C) consumer. Wholesale
-                  contractor pricing and commercial trade billing are not enabled for this account.
+                  contractor pricing and wholesale eligibility are not enabled for this account.
                 </Typography.Text>
                 {canVerifyB2b && (
                   <Typography.Paragraph type="secondary" style={{ fontSize: 13, marginBottom: 0 }}>
@@ -431,12 +431,17 @@ export function CustomerDetailPage() {
               setTargetStatus(null);
             }}
             onSuccess={(updated) => {
-              const actionText =
-                updated.status === UserStatus.SUSPENDED ? 'suspended' : 'reactivated';
-              handleCustomerUpdated(
-                updated,
-                `Customer account has been successfully ${actionText}.`,
-              );
+              if (updated.status === UserStatus.SUSPENDED) {
+                handleCustomerUpdated(
+                  updated,
+                  'Customer account suspended successfully. The customer cannot access platform services while suspended.',
+                );
+              } else {
+                handleCustomerUpdated(
+                  updated,
+                  'Customer account reactivated successfully. The customer may need to sign in again.',
+                );
+              }
             }}
           />
 
@@ -454,7 +459,7 @@ export function CustomerDetailPage() {
                 updated,
                 isB2b
                   ? 'B2B wholesale contractor status has been successfully granted.'
-                  : 'B2B wholesale status has been revoked. Customer is now B2C retail.',
+                  : 'B2B wholesale status has been revoked. Wholesale eligibility and wholesale pricing access have been removed.',
               );
             }}
           />

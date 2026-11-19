@@ -4,6 +4,8 @@ export * from './phone-otp.model.js';
 export * from './refresh-token.model.js';
 export * from './service-area.model.js';
 export * from './partner.model.js';
+export * from './partner-application.model.js';
+export * from './partner-audit-log.model.js';
 export * from './category.model.js';
 export * from './sku-registry.model.js';
 export * from './product.model.js';

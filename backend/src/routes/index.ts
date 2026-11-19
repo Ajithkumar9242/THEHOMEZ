@@ -47,3 +47,5 @@ export * from './storefront.routes.js';
 export * from './customer-address.routes.js';
 export * from './cart.routes.js';
 export * from './checkout.routes.js';
+export * from './admin-partner-application.routes.js';
+export * from './admin-partner-application.schemas.js';

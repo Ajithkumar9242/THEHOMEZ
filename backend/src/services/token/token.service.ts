@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
 import jwt, { type SignOptions, type JwtPayload } from 'jsonwebtoken';
-import type { IAuthTokens, UserType } from '@thehomez/shared-types';
-import { UserStatus } from '@thehomez/shared-types';
+import type { IAuthTokens } from '@thehomez/shared-types';
+import { UserType, UserStatus } from '@thehomez/shared-types';
 import { RefreshTokenModel } from '../../models/refresh-token.model.js';
 import { UserModel, type IUserDocument } from '../../models/user.model.js';
+import { PartnerModel } from '../../models/partner.model.js';
 import { getConfig } from '../../config/env.js';
 import { logger } from '../../logger/logger.js';
 
@@ -225,6 +226,24 @@ export class TokenService {
         'ACCOUNT_NOT_ACTIVE',
         403,
       );
+    }
+
+    // Scenario 4b: Partner organization active status verification
+    if (user.userType === UserType.PARTNER) {
+      const partner = user.partnerId ? await PartnerModel.findById(user.partnerId) : null;
+      if (!partner || partner.status !== 'ACTIVE') {
+        await RefreshTokenModel.updateMany(
+          { familyId: existingRecord.familyId },
+          { $set: { isRevoked: true, revokedReason: 'SECURITY_RESET', revokedAt: now } },
+        );
+        throw new TokenError(
+          partner
+            ? `Partner organisation is ${partner.status.toLowerCase()}`
+            : 'Partner organisation not found',
+          'PARTNER_NOT_ACTIVE',
+          403,
+        );
+      }
     }
 
     // Scenario 5: ATOMIC ROTATION

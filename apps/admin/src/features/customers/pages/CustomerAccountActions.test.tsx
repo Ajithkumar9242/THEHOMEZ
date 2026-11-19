@@ -164,7 +164,9 @@ describe('Customer Account Actions & Modals (Stage C-6)', () => {
 
       expect(screen.getByText('Reactivate Customer Account')).toBeInTheDocument();
       expect(
-        screen.getByText(/Reactivating this account will restore access to platform services/i),
+        screen.getByText(
+          'The customer account will be reactivated. The customer may need to sign in again to regain access.',
+        ),
       ).toBeInTheDocument();
 
       const reasonInput = screen.getByPlaceholderText(/State the reason for account reactivation/i);
@@ -348,7 +350,9 @@ describe('Customer Account Actions & Modals (Stage C-6)', () => {
 
       expect(screen.getByText('Revoke B2B Wholesale Status')).toBeInTheDocument();
       expect(
-        screen.getByText(/Revoking B2B status will remove the B2B_CUSTOMER role/i),
+        screen.getByText(
+          /Revoking B2B status removes this customer's wholesale eligibility and associated wholesale pricing access/i,
+        ),
       ).toBeInTheDocument();
 
       const reasonInput = screen.getByPlaceholderText(
@@ -399,6 +403,171 @@ describe('Customer Account Actions & Modals (Stage C-6)', () => {
       fireEvent.click(confirmBtn);
 
       expect(await screen.findByText('GSTIN verification service timed out')).toBeInTheDocument();
+    });
+  });
+
+  describe('Stage C-6A: Business-Rule Alignment & Identity Verification', () => {
+    describe('Correction A — Account Reactivation Messaging', () => {
+      it('clarifies that customer may need to sign in again without promising session restoration', () => {
+        render(
+          <CustomerStatusActionModal
+            open={true}
+            customer={mockSuspendedB2cCustomer}
+            targetStatus="ACTIVE"
+            onClose={vi.fn()}
+            onSuccess={vi.fn()}
+          />,
+        );
+
+        expect(
+          screen.getByText(
+            'The customer account will be reactivated. The customer may need to sign in again to regain access.',
+          ),
+        ).toBeInTheDocument();
+
+        // Ensure no promise of automatic session restoration exists
+        expect(screen.queryByText(/restore active session/i)).toBeNull();
+        expect(screen.queryByText(/tokens will be restored/i)).toBeNull();
+      });
+
+      it('retains clear explanation that suspended customer cannot continue using account', () => {
+        render(
+          <CustomerStatusActionModal
+            open={true}
+            customer={mockActiveCustomer}
+            targetStatus="SUSPENDED"
+            onClose={vi.fn()}
+            onSuccess={vi.fn()}
+          />,
+        );
+
+        expect(
+          screen.getByText(
+            /Suspending this account immediately revokes all active customer refresh tokens and terminates active customer sessions/i,
+          ),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByText(
+            /The customer will be unable to log in, place new orders, or access their saved cart/i,
+          ),
+        ).toBeInTheDocument();
+      });
+    });
+
+    describe('Correction B — B2B Revocation Messaging', () => {
+      it('describes loss of wholesale eligibility and wholesale pricing without unsupported credit or billing claims', () => {
+        render(
+          <CustomerB2bModal
+            open={true}
+            customer={mockActiveCustomer}
+            mode="revoke"
+            onClose={vi.fn()}
+            onSuccess={vi.fn()}
+          />,
+        );
+
+        expect(
+          screen.getByText(
+            "Revoking B2B status removes this customer's wholesale eligibility and associated wholesale pricing access. The customer segment will revert to B2C Retail.",
+          ),
+        ).toBeInTheDocument();
+
+        // Ensure unsupported claims do not appear
+        expect(screen.queryByText(/credit/i)).toBeNull();
+        expect(screen.queryByText(/net-30/i)).toBeNull();
+        expect(screen.queryByText(/settlement/i)).toBeNull();
+        expect(screen.queryByText(/billing facility/i)).toBeNull();
+      });
+
+      it('preserves GSTIN disclaimer during grant mode without external tax portal claim', () => {
+        render(
+          <CustomerB2bModal
+            open={true}
+            customer={mockSuspendedB2cCustomer}
+            mode="grant"
+            onClose={vi.fn()}
+            onSuccess={vi.fn()}
+          />,
+        );
+
+        expect(
+          screen.getByText(
+            /GSTIN format validation confirms pattern compliance only \(15 alphanumeric characters\) and does not represent an external GST portal tax verification/i,
+          ),
+        ).toBeInTheDocument();
+      });
+    });
+
+    describe('Correction C — Customer Identity and Safe Name Handling', () => {
+      it('displays customer phone as primary identity and renders optional email safely in status modal', () => {
+        render(
+          <CustomerStatusActionModal
+            open={true}
+            customer={mockActiveCustomer}
+            targetStatus="SUSPENDED"
+            onClose={vi.fn()}
+            onSuccess={vi.fn()}
+          />,
+        );
+
+        expect(screen.getByText('+919876543210')).toBeInTheDocument();
+        expect(screen.getByText('contractor@apexinfra.in')).toBeInTheDocument();
+        expect(screen.getByText('507f1f77bcf86cd799439011')).toBeInTheDocument();
+
+        // Verify no fabricated customer personal name is rendered
+        expect(screen.queryByText(/John Doe/i)).toBeNull();
+        expect(screen.queryByText(/Customer Name/i)).toBeNull();
+      });
+
+      it('safely handles null email with fallback em-dash in status modal without crashing', () => {
+        render(
+          <CustomerStatusActionModal
+            open={true}
+            customer={mockSuspendedB2cCustomer}
+            targetStatus="ACTIVE"
+            onClose={vi.fn()}
+            onSuccess={vi.fn()}
+          />,
+        );
+
+        expect(screen.getByText('+919876543211')).toBeInTheDocument();
+        expect(screen.getByText('507f1f77bcf86cd799439012')).toBeInTheDocument();
+        expect(screen.getByText('—')).toBeInTheDocument();
+      });
+
+      it('displays customer phone and safe email in B2B modal and labels company name as enterprise information', () => {
+        render(
+          <CustomerB2bModal
+            open={true}
+            customer={mockActiveCustomer}
+            mode="update"
+            onClose={vi.fn()}
+            onSuccess={vi.fn()}
+          />,
+        );
+
+        expect(screen.getByText('+919876543210')).toBeInTheDocument();
+        expect(screen.getByText('contractor@apexinfra.in')).toBeInTheDocument();
+
+        // Label must be Company / Enterprise Name, not personal name
+        expect(screen.getByText('Company / Enterprise Name')).toBeInTheDocument();
+        expect(screen.queryByText('Customer Personal Name')).toBeNull();
+      });
+
+      it('safely renders B2B modal with null email without crashing', () => {
+        render(
+          <CustomerB2bModal
+            open={true}
+            customer={mockSuspendedB2cCustomer}
+            mode="grant"
+            onClose={vi.fn()}
+            onSuccess={vi.fn()}
+          />,
+        );
+
+        expect(screen.getByText('+919876543211')).toBeInTheDocument();
+        expect(screen.getByText('—')).toBeInTheDocument();
+      });
     });
   });
 });

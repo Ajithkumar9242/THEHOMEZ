@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Avatar, Breadcrumb, Button, Layout, Menu, Space, Tag, Typography, Grid } from 'antd';
 import {
   AppstoreOutlined,
+  AuditOutlined,
   BankOutlined,
   BellOutlined,
   BuildOutlined,
@@ -28,6 +29,7 @@ const modules = [
   { key: '/service-areas', label: 'Service Areas', icon: <BuildOutlined /> },
   { key: '/customers', label: 'Customers', icon: <TeamOutlined /> },
   { key: '/partners', label: 'Partners', icon: <ShopOutlined /> },
+  { key: '/partner-applications', label: 'Applications', icon: <AuditOutlined /> },
   { key: '/orders', label: 'Orders', icon: <FileSearchOutlined /> },
   { key: '/finance', label: 'Finance', icon: <BankOutlined /> },
   { key: '/settlements', label: 'Settlements', icon: <BankOutlined /> },
@@ -51,7 +53,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       (item.key === '/catalogue/products' && location.pathname.startsWith('/catalogue/products')) ||
       (item.key === '/catalogue/units' && location.pathname.startsWith('/catalogue/units/')) ||
       (item.key === '/service-areas' && location.pathname.startsWith('/service-areas/')) ||
-      (item.key === '/customers' && location.pathname.startsWith('/customers')),
+      (item.key === '/customers' && location.pathname.startsWith('/customers')) ||
+      (item.key === '/partner-applications' &&
+        location.pathname.startsWith('/partner-applications')) ||
+      (item.key === '/partners' &&
+        (location.pathname === '/partners' || location.pathname.startsWith('/partners/'))),
   );
   const breadcrumbItems = useMemo(
     () => [{ title: 'Admin' }, { title: active?.label || 'Workspace' }],
@@ -66,6 +72,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     }
     if (item.key === '/customers') {
       return user?.permissions.includes(PermissionCode.CUSTOMER_READ);
+    }
+    if (item.key === '/partners' || item.key === '/partner-applications') {
+      return user?.permissions.includes(PermissionCode.PARTNER_READ);
     }
     return true;
   });
@@ -102,7 +111,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               item?.key === '/catalogue/products' ||
               item?.key === '/catalogue/units' ||
               item?.key === '/service-areas' ||
-              item?.key === '/customers'
+              item?.key === '/customers' ||
+              item?.key === '/partners' ||
+              item?.key === '/partner-applications'
             )
               navigate(item.key);
           }}
@@ -113,7 +124,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               item.key === '/catalogue/products' ||
               item.key === '/catalogue/units' ||
               item.key === '/service-areas' ||
-              item.key === '/customers';
+              item.key === '/customers' ||
+              item.key === '/partners' ||
+              item.key === '/partner-applications';
 
             return {
               key: item.key,

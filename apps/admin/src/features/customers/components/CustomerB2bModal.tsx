@@ -145,7 +145,7 @@ export function CustomerB2bModal({
             type="warning"
             showIcon
             message="B2B Wholesale Privileges Revocation"
-            description="Revoking B2B status will remove the B2B_CUSTOMER role from this customer, resetting their account segment to B2C Retail. Wholesale contractor pricing and terms will no longer be available."
+            description="Revoking B2B status removes this customer's wholesale eligibility and associated wholesale pricing access. The customer segment will revert to B2C Retail."
           />
         ) : (
           <Alert
@@ -164,6 +164,15 @@ export function CustomerB2bModal({
         >
           <Descriptions.Item label="Customer Phone">
             <Typography.Text strong>{customer.phone}</Typography.Text>
+          </Descriptions.Item>
+          <Descriptions.Item label="Customer Email">
+            {customer.email ? (
+              <Typography.Text copyable={{ text: customer.email }}>
+                {customer.email}
+              </Typography.Text>
+            ) : (
+              <Typography.Text type="secondary">—</Typography.Text>
+            )}
           </Descriptions.Item>
           <Descriptions.Item label="Customer ID">
             <Typography.Text copyable={{ text: customer.id }} style={{ fontFamily: 'monospace' }}>

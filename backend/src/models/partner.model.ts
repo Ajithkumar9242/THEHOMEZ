@@ -12,6 +12,7 @@ export interface IPartnerDocument extends Document {
   status: PartnerStatus;
   deliveryMode: DeliveryMode;
   metadata?: Record<string, unknown>;
+  coverageVersion: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -67,8 +68,14 @@ const partnerSchema = new Schema<IPartnerDocument>(
       type: String,
       required: true,
       enum: ['ACTIVE', 'INACTIVE', 'PENDING_VERIFICATION', 'SUSPENDED'],
-      default: 'ACTIVE',
+      default: 'PENDING_VERIFICATION',
       index: true,
+    },
+    coverageVersion: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: [0, 'coverageVersion cannot be negative'],
     },
     deliveryMode: {
       type: String,

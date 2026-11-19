@@ -653,4 +653,125 @@ describe('Admin Customer Detail View (Stage C-5)', () => {
       expect(screen.queryByText('refresh-token-here')).toBeNull();
     });
   });
+
+  describe('7. Stage C-6A: Final UX & Business-Rule Alignment', () => {
+    it('displays aligned reactivation success message explaining customer may need to sign in again', async () => {
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(
+        mockCustomerDetailEmptyAddresses,
+      );
+      const reactivatedCustomer: IAdminCustomerDetailDto = {
+        ...mockCustomerDetailEmptyAddresses,
+        status: UserStatus.ACTIVE,
+      };
+      vi.mocked(customerClient.updateCustomerStatus).mockResolvedValueOnce(reactivatedCustomer);
+
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439012', staffWithSuspendPerm);
+
+      const reactivateBtn = await screen.findByRole('button', {
+        name: /reactivate customer account/i,
+      });
+      fireEvent.click(reactivateBtn);
+
+      const reasonInput = screen.getByPlaceholderText(/State the reason for account reactivation/i);
+      fireEvent.change(reasonInput, { target: { value: 'Compliance review completed' } });
+
+      const confirmBtn = screen.getByRole('button', { name: 'Confirm Reactivation' });
+      fireEvent.click(confirmBtn);
+
+      expect(
+        await screen.findByText(
+          'Customer account reactivated successfully. The customer may need to sign in again.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('displays aligned suspension success message explaining customer cannot access platform while suspended', async () => {
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(mockCustomerDetail1);
+      const suspendedCustomer: IAdminCustomerDetailDto = {
+        ...mockCustomerDetail1,
+        status: UserStatus.SUSPENDED,
+      };
+      vi.mocked(customerClient.updateCustomerStatus).mockResolvedValueOnce(suspendedCustomer);
+
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439011', staffWithSuspendPerm);
+
+      const suspendBtn = await screen.findByRole('button', { name: /suspend customer account/i });
+      fireEvent.click(suspendBtn);
+
+      const reasonInput = screen.getByPlaceholderText(/State the reason for account suspension/i);
+      fireEvent.change(reasonInput, { target: { value: 'Suspicious card testing behavior' } });
+
+      const confirmBtn = screen.getByRole('button', { name: 'Confirm Suspension' });
+      fireEvent.click(confirmBtn);
+
+      expect(
+        await screen.findByText(
+          'Customer account suspended successfully. The customer cannot access platform services while suspended.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('displays aligned B2B revocation success message removing wholesale eligibility without billing claims', async () => {
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(mockCustomerDetail1);
+      const revokedCustomer: IAdminCustomerDetailDto = {
+        ...mockCustomerDetail1,
+        customerSegment: 'B2C',
+        roles: [],
+      };
+      vi.mocked(customerClient.updateCustomerB2bStatus).mockResolvedValueOnce(revokedCustomer);
+
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439011', staffWithB2bVerifyPerm);
+
+      const revokeBtn = await screen.findByRole('button', { name: /revoke b2b status/i });
+      fireEvent.click(revokeBtn);
+
+      const reasonInput = screen.getByPlaceholderText(
+        /State the reason for revoking B2B wholesale status/i,
+      );
+      fireEvent.change(reasonInput, { target: { value: 'Business entity dissolved' } });
+
+      const confirmBtn = screen.getByRole('button', { name: 'Confirm B2B Revocation' });
+      fireEvent.click(confirmBtn);
+
+      expect(
+        await screen.findByText(
+          'B2B wholesale status has been revoked. Wholesale eligibility and wholesale pricing access have been removed.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('renders retail B2C notice with wholesale eligibility and omits commercial trade billing or credit terms', async () => {
+      vi.mocked(customerClient.getCustomerById).mockResolvedValueOnce(
+        mockCustomerDetailEmptyAddresses,
+      );
+      renderCustomerDetail('/customers/507f1f77bcf86cd799439012', staffWithCustomerRead);
+
+      expect(
+        await screen.findByText(
+          /Wholesale contractor pricing and wholesale eligibility are not enabled for this account/i,
+        ),
+      ).toBeInTheDocument();
+
+      // Ensure unsupported billing/credit terminology is absent
+      expect(screen.queryByText(/commercial trade billing/i)).toBeNull();
+      expect(screen.queryByText(/net-30/i)).toBeNull();
+      expect(screen.queryByText(/credit terms/i)).toBeNull();
+    });
+
+    it('preserves customer phone as primary heading identity and labels company as enterprise info', async () => {
+      renderCustomerDetail();
+
+      // Phone is top-level heading
+      expect(
+        await screen.findByRole('heading', { level: 1, name: '+919876543210' }),
+      ).toBeInTheDocument();
+
+      // Company name is labeled as Company Name under B2B Contractor Verification, not personal name
+      expect(screen.getByText('Kumar Construction Supplies Ltd')).toBeInTheDocument();
+      expect(screen.getByText('Company Name')).toBeInTheDocument();
+
+      // Verify no top-level personal name is assumed
+      expect(screen.queryByText('Customer Personal Name')).toBeNull();
+    });
+  });
 });

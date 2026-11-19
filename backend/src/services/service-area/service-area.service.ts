@@ -12,6 +12,7 @@ import {
 } from '@thehomez/shared-types';
 import { ServiceAreaModel, type IServiceAreaDocument } from '../../models/service-area.model.js';
 import { PartnerModel, type IPartnerDocument } from '../../models/partner.model.js';
+import { withTransaction } from '../../database/transaction.js';
 import { logger } from '../../logger/logger.js';
 
 export class ServiceAreaError extends Error {
@@ -365,52 +366,119 @@ export class ServiceAreaService {
     const nextPincodes =
       dto.pincodes !== undefined ? this.normalizePincodes(dto.pincodes) : area.pincodes;
 
-    // If service area is active or being activated, ensure no PIN conflict with other active service areas
-    if (nextIsActive) {
-      const conflict = await this.findActivePincodeConflicts(nextPincodes, area._id);
-      if (conflict) {
-        throw new ServiceAreaError(
-          `PIN code coverage conflict: PIN(s) [${conflict.conflictingPincodes.join(', ')}] are already assigned to active service area "${conflict.conflictingAreaCode}". An active PIN code cannot be ambiguously assigned to multiple active service areas.`,
-          'PIN_COVERAGE_CONFLICT',
-          409,
+    const isDeactivation = area.isActive === true && nextIsActive === false;
+
+    if (isDeactivation) {
+      await withTransaction(async (session) => {
+        // 1. Level 1 Same-Area Guard: Contend on this service-area document
+        const guardResult = await ServiceAreaModel.updateOne(
+          { _id: area._id, isActive: true },
+          { $inc: { guardVersion: 1 } },
+          { session },
         );
-      }
-    }
 
-    area.isActive = nextIsActive;
-    area.pincodes = nextPincodes;
-
-    try {
-      await area.save();
-    } catch (err: unknown) {
-      const mongoErr = err as {
-        code?: number;
-        message?: string;
-        keyPattern?: Record<string, unknown>;
-      } | null;
-      if (mongoErr?.code === 11000) {
-        const errMsg = mongoErr.message ?? '';
-        const keyPattern = mongoErr.keyPattern;
-        if (
-          keyPattern?.pincodes ||
-          errMsg.includes('unique_active_pincodes') ||
-          errMsg.includes('pincodes')
-        ) {
+        if (guardResult.matchedCount === 0) {
           throw new ServiceAreaError(
-            'PIN code coverage conflict: One or more PIN codes are already assigned to an active service area.',
+            'Service area is already inactive or not found',
+            'SERVICE_AREA_NOT_FOUND',
+            404,
+          );
+        }
+
+        // 2. Query all active partners depending on this service area
+        const dependentPartners = await PartnerModel.find({
+          serviceAreaIds: area._id,
+          status: 'ACTIVE',
+        })
+          .select('_id businessName serviceAreaIds coverageVersion')
+          .session(session);
+
+        // 3. Deterministic lock ordering: sort by _id ascending
+        dependentPartners.sort((a, b) => a._id.toString().localeCompare(b._id.toString()));
+
+        // 4. Acquire Level 2 Partner Coverage Guards & evaluate dependency invariant
+        for (const partner of dependentPartners) {
+          const otherActiveCount = await ServiceAreaModel.countDocuments({
+            _id: { $in: partner.serviceAreaIds, $ne: area._id },
+            isActive: true,
+          }).session(session);
+
+          if (otherActiveCount === 0) {
+            throw new ServiceAreaError(
+              `ACTIVE_PARTNER_DEPENDENCY: Cannot deactivate service area "${area.code}": Active partner "${partner.businessName}" (${partner._id}) has zero other active assigned service areas. Reassign or suspend the partner first.`,
+              'ACTIVE_PARTNER_DEPENDENCY',
+              400,
+            );
+          }
+
+          const partnerGuardResult = await PartnerModel.updateOne(
+            { _id: partner._id, status: 'ACTIVE' },
+            { $inc: { coverageVersion: 1 } },
+            { session },
+          );
+
+          if (partnerGuardResult.matchedCount === 0) {
+            throw new ServiceAreaError(
+              `Partner "${partner._id}" was concurrently deactivated, suspended, or modified`,
+              'PARTNER_CONCURRENTLY_MODIFIED',
+              409,
+            );
+          }
+        }
+
+        // 5. Apply deactivation and save within transaction
+        area.isActive = false;
+        area.pincodes = nextPincodes;
+        await area.save({ session });
+      });
+    } else {
+      // If service area is active or being activated, ensure no PIN conflict with other active service areas
+      if (nextIsActive) {
+        const conflict = await this.findActivePincodeConflicts(nextPincodes, area._id);
+        if (conflict) {
+          throw new ServiceAreaError(
+            `PIN code coverage conflict: PIN(s) [${conflict.conflictingPincodes.join(', ')}] are already assigned to active service area "${conflict.conflictingAreaCode}". An active PIN code cannot be ambiguously assigned to multiple active service areas.`,
             'PIN_COVERAGE_CONFLICT',
             409,
           );
         }
-        if (keyPattern?.code || errMsg.includes('unique_code') || errMsg.includes('code')) {
-          throw new ServiceAreaError(
-            `Service area with code "${area.code}" already exists`,
-            'SERVICE_AREA_CODE_EXISTS',
-            409,
-          );
-        }
       }
-      throw err;
+
+      area.isActive = nextIsActive;
+      area.pincodes = nextPincodes;
+
+      try {
+        await area.save();
+      } catch (err: unknown) {
+        const mongoErr = err as {
+          code?: number;
+          message?: string;
+          keyPattern?: Record<string, unknown>;
+        } | null;
+        if (mongoErr?.code === 11000) {
+          const errMsg = mongoErr.message ?? '';
+          const keyPattern = mongoErr.keyPattern;
+          if (
+            keyPattern?.pincodes ||
+            errMsg.includes('unique_active_pincodes') ||
+            errMsg.includes('pincodes')
+          ) {
+            throw new ServiceAreaError(
+              'PIN code coverage conflict: One or more PIN codes are already assigned to an active service area.',
+              'PIN_COVERAGE_CONFLICT',
+              409,
+            );
+          }
+          if (keyPattern?.code || errMsg.includes('unique_code') || errMsg.includes('code')) {
+            throw new ServiceAreaError(
+              `Service area with code "${area.code}" already exists`,
+              'SERVICE_AREA_CODE_EXISTS',
+              409,
+            );
+          }
+        }
+        throw err;
+      }
     }
 
     logger.info(
@@ -528,8 +596,49 @@ export class ServiceAreaService {
       }
     }
 
-    partner.serviceAreaIds = objectIds;
-    await partner.save();
+    if (partner.status === 'ACTIVE') {
+      await withTransaction(async (session) => {
+        if (objectIds.length === 0) {
+          throw new ServiceAreaError(
+            'An active partner must retain at least one active assigned service area.',
+            'NO_ACTIVE_SERVICE_AREA',
+            400,
+          );
+        }
+
+        const activeCount = await ServiceAreaModel.countDocuments({
+          _id: { $in: objectIds },
+          isActive: true,
+        }).session(session);
+
+        if (activeCount === 0) {
+          throw new ServiceAreaError(
+            'An active partner must retain at least one active assigned service area.',
+            'NO_ACTIVE_SERVICE_AREA',
+            400,
+          );
+        }
+
+        const result = await PartnerModel.updateOne(
+          { _id: partner._id, status: 'ACTIVE' },
+          { $set: { serviceAreaIds: objectIds }, $inc: { coverageVersion: 1 } },
+          { session },
+        );
+
+        if (result.matchedCount === 0) {
+          throw new ServiceAreaError(
+            'Partner was concurrently modified or is no longer active',
+            'PARTNER_CONCURRENTLY_MODIFIED',
+            409,
+          );
+        }
+
+        partner.serviceAreaIds = objectIds;
+      });
+    } else {
+      partner.serviceAreaIds = objectIds;
+      await partner.save();
+    }
 
     logger.info(
       { partnerId: partner._id, assignedCount: objectIds.length },

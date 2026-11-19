@@ -10,6 +10,7 @@ import {
 import { TokenService, TokenError } from '../services/token/token.service.js';
 import { RbacService } from '../services/rbac/rbac.service.js';
 import { UserModel } from '../models/user.model.js';
+import { PartnerModel } from '../models/partner.model.js';
 
 const tokenService = new TokenService();
 const rbacService = new RbacService();
@@ -112,6 +113,43 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     if (user.userType !== decoded.userType) {
       sendSecurityError(req, res, 401, 'IDENTITY_MISMATCH', 'Token identity type mismatch');
       return;
+    }
+
+    // 4b. Enforce Parent Partner Tenant Active Lifecycle Check for PARTNER identities
+    if (user.userType === UserType.PARTNER) {
+      if (!user.partnerId || !Types.ObjectId.isValid(user.partnerId.toString())) {
+        sendSecurityError(
+          req,
+          res,
+          403,
+          'PARTNER_CONTEXT_REQUIRED',
+          'Partner identity context missing or invalid',
+        );
+        return;
+      }
+
+      const partner = await PartnerModel.findById(user.partnerId);
+      if (!partner) {
+        sendSecurityError(
+          req,
+          res,
+          403,
+          'PARTNER_NOT_FOUND',
+          'Associated partner organisation not found',
+        );
+        return;
+      }
+
+      if (partner.status !== 'ACTIVE') {
+        sendSecurityError(
+          req,
+          res,
+          403,
+          'PARTNER_NOT_ACTIVE',
+          `Partner organisation is ${partner.status.toLowerCase()}. Access denied`,
+        );
+        return;
+      }
     }
 
     // 5. Dynamically resolve fresh database-backed roles & permissions

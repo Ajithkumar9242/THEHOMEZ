@@ -10,6 +10,7 @@ export interface IServiceAreaDocument extends Document {
   pincodes: string[];
   deliveryRadiusKm?: number;
   isActive: boolean;
+  guardVersion: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -90,6 +91,12 @@ const serviceAreaSchema = new Schema<IServiceAreaDocument>(
       required: true,
       default: true,
       index: true,
+    },
+    guardVersion: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: [0, 'guardVersion cannot be negative'],
     },
   },
   {

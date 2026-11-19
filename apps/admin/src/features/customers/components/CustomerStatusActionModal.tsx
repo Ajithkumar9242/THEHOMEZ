@@ -109,7 +109,7 @@ export function CustomerStatusActionModal({
             showIcon
             icon={<ExclamationCircleOutlined />}
             message="Account Reactivation Impact"
-            description="Reactivating this account will restore access to platform services, customer directory searchability, and order placement capabilities. The customer will need to authenticate anew."
+            description="The customer account will be reactivated. The customer may need to sign in again to regain access."
           />
         )}
 
@@ -121,6 +121,15 @@ export function CustomerStatusActionModal({
         >
           <Descriptions.Item label="Customer Phone">
             <Typography.Text strong>{customer.phone}</Typography.Text>
+          </Descriptions.Item>
+          <Descriptions.Item label="Customer Email">
+            {customer.email ? (
+              <Typography.Text copyable={{ text: customer.email }}>
+                {customer.email}
+              </Typography.Text>
+            ) : (
+              <Typography.Text type="secondary">—</Typography.Text>
+            )}
           </Descriptions.Item>
           <Descriptions.Item label="Customer ID">
             <Typography.Text copyable={{ text: customer.id }} style={{ fontFamily: 'monospace' }}>
