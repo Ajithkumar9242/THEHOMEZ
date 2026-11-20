@@ -67,6 +67,12 @@ describe('Milestone 4 Step 7: Subtask 7.2B — StorefrontDiscoveryService Domain
   // Fixtures for page-size invariance profiling (25 additional standalone products)
   const paginationFixtures: IProductDocument[] = [];
 
+  const createdCategoryIds: Types.ObjectId[] = [];
+  const createdServiceAreaIds: Types.ObjectId[] = [];
+  const createdPartnerIds: Types.ObjectId[] = [];
+  const createdUserIds: Types.ObjectId[] = [];
+  const createdProductIds: Types.ObjectId[] = [];
+
   // Query Profiling Harness
   interface MongooseQueryLog {
     collection: string;
@@ -85,17 +91,7 @@ describe('Milestone 4 Step 7: Subtask 7.2B — StorefrontDiscoveryService Domain
       }
     });
 
-    // Clean existing test collections
-    await Promise.all([
-      ProductModel.deleteMany({}),
-      ProductVariantModel.deleteMany({}),
-      ProductPricingModel.deleteMany({}),
-      CategoryModel.deleteMany({}),
-      ServiceAreaModel.deleteMany({}),
-      PartnerModel.deleteMany({}),
-      PartnerProductModel.deleteMany({}),
-      UserModel.deleteMany({}),
-    ]);
+
 
     // -----------------------------------------------------------------------
     // 1. Seed Taxonomy
@@ -540,20 +536,54 @@ describe('Milestone 4 Step 7: Subtask 7.2B — StorefrontDiscoveryService Domain
       createdBy: dummyStaffId,
       updatedBy: dummyStaffId,
     });
+
+    createdCategoryIds.push(
+      rootCementCat._id,
+      subPpcCementCat._id,
+      rootSteelCat._id,
+      subFe550dCat._id,
+      inactiveRootCat._id,
+      inactiveSubCat._id,
+    );
+    createdServiceAreaIds.push(blrCentralArea._id, blrWhitefieldArea._id, inactiveArea._id);
+    createdPartnerIds.push(kaveriPartner._id, bharathPartner._id, malabarSuspendedPartner._id);
+    createdUserIds.push(b2cCustomer._id, b2bContractor._id, suspendedB2bUser._id);
+    createdProductIds.push(
+      standaloneProduct._id,
+      multiVariantProduct._id,
+      outOfStockProduct._id,
+      archivedProduct._id,
+      draftProduct._id,
+      inactiveCatProduct._id,
+      ...paginationFixtures.map((p) => p._id),
+    );
   });
 
   afterAll(async () => {
     isProfiling = false;
-    await Promise.all([
-      ProductModel.deleteMany({}),
-      ProductVariantModel.deleteMany({}),
-      ProductPricingModel.deleteMany({}),
-      CategoryModel.deleteMany({}),
-      ServiceAreaModel.deleteMany({}),
-      PartnerModel.deleteMany({}),
-      PartnerProductModel.deleteMany({}),
-      UserModel.deleteMany({}),
-    ]);
+    if (createdProductIds.length > 0) {
+      await ProductPricingModel.deleteMany({ productId: { $in: createdProductIds } });
+      await ProductVariantModel.deleteMany({ productId: { $in: createdProductIds } });
+      await PartnerProductModel.deleteMany({ productId: { $in: createdProductIds } });
+      await ProductModel.deleteMany({ _id: { $in: createdProductIds } });
+      createdProductIds.length = 0;
+    }
+    if (createdCategoryIds.length > 0) {
+      await CategoryModel.deleteMany({ _id: { $in: createdCategoryIds } });
+      createdCategoryIds.length = 0;
+    }
+    if (createdServiceAreaIds.length > 0) {
+      await ServiceAreaModel.deleteMany({ _id: { $in: createdServiceAreaIds } });
+      createdServiceAreaIds.length = 0;
+    }
+    if (createdPartnerIds.length > 0) {
+      await PartnerModel.deleteMany({ _id: { $in: createdPartnerIds } });
+      createdPartnerIds.length = 0;
+    }
+    if (createdUserIds.length > 0) {
+      await UserModel.deleteMany({ _id: { $in: createdUserIds } });
+      createdUserIds.length = 0;
+    }
     await disconnectDatabase();
   });
 

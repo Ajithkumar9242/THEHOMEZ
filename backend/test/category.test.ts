@@ -32,6 +32,12 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
   let partnerUser: InstanceType<typeof UserModel>;
   let partnerToken: string;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdCategoryIds: mongoose.Types.ObjectId[] = [];
+  const createdRoleIds: mongoose.Types.ObjectId[] = [];
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
+  const createdPartnerIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -44,33 +50,48 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
     app = createApp();
 
     if (isDbConnected) {
-      await CategoryModel.deleteMany({
-        slug: { $regex: /^(test-|civil-|steel-|plumbing-|electrical-|services-)/ },
+      CategoryModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdCategoryIds.push(doc._id);
       });
-      await UserModel.deleteMany({ phone: { $regex: /^\+919333/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^CAT_TEST_/ } });
-      await PartnerModel.deleteMany({ businessName: { $regex: /^Test Category Partner/ } });
     }
   });
 
   afterAll(async () => {
     if (isDbConnected) {
-      await CategoryModel.deleteMany({
-        slug: { $regex: /^(test-|civil-|steel-|plumbing-|electrical-|services-)/ },
-      });
-      await UserModel.deleteMany({ phone: { $regex: /^\+919333/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^CAT_TEST_/ } });
-      await PartnerModel.deleteMany({ businessName: { $regex: /^Test Category Partner/ } });
+      if (createdCategoryIds.length > 0) {
+        const catIds = [...createdCategoryIds];
+        createdCategoryIds.length = 0;
+        await CategoryModel.deleteMany({ _id: { $in: catIds } });
+      }
+      if (createdUserIds.length > 0) {
+        const userIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await UserModel.deleteMany({ _id: { $in: userIds } });
+      }
+      if (createdRoleIds.length > 0) {
+        const roleIds = [...createdRoleIds];
+        createdRoleIds.length = 0;
+        await RoleModel.deleteMany({ _id: { $in: roleIds } });
+      }
+      if (createdPartnerIds.length > 0) {
+        const partnerIds = [...createdPartnerIds];
+        createdPartnerIds.length = 0;
+        await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
+      }
       await disconnectDatabase();
     }
   });
 
   beforeEach(async () => {
     if (isDbConnected) {
-      await CategoryModel.deleteMany({ slug: { $regex: /^test-/ } });
+      if (createdCategoryIds.length > 0) {
+        const catIds = [...createdCategoryIds];
+        createdCategoryIds.length = 0;
+        await CategoryModel.deleteMany({ _id: { $in: catIds } });
+      }
 
       // 1. Catalog Manager (CATALOG_WRITE + CATALOG_READ)
-      await RoleModel.findOneAndUpdate(
+      const role1 = await RoleModel.findOneAndUpdate(
         { code: 'CAT_TEST_ADMIN' },
         {
           code: 'CAT_TEST_ADMIN',
@@ -81,6 +102,7 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       );
+      if (role1) createdRoleIds.push(role1._id);
 
       catalogAdminUser = (await UserModel.findOneAndUpdate(
         { phone: '+919333000001' },
@@ -92,10 +114,11 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       )) as InstanceType<typeof UserModel>;
+      if (catalogAdminUser) createdUserIds.push(catalogAdminUser._id);
       catalogAdminToken = tokenService.signAccessToken(catalogAdminUser);
 
       // 2. Catalog Read Only (CATALOG_READ only)
-      await RoleModel.findOneAndUpdate(
+      const role2 = await RoleModel.findOneAndUpdate(
         { code: 'CAT_TEST_RO' },
         {
           code: 'CAT_TEST_RO',
@@ -106,6 +129,7 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       );
+      if (role2) createdRoleIds.push(role2._id);
 
       catalogReadOnlyUser = (await UserModel.findOneAndUpdate(
         { phone: '+919333000002' },
@@ -117,10 +141,11 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       )) as InstanceType<typeof UserModel>;
+      if (catalogReadOnlyUser) createdUserIds.push(catalogReadOnlyUser._id);
       catalogReadOnlyToken = tokenService.signAccessToken(catalogReadOnlyUser);
 
       // 3. Unauthorized Staff User (lacks catalog permissions)
-      await RoleModel.findOneAndUpdate(
+      const role3 = await RoleModel.findOneAndUpdate(
         { code: 'CAT_TEST_UNAUTH' },
         {
           code: 'CAT_TEST_UNAUTH',
@@ -131,6 +156,7 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       );
+      if (role3) createdRoleIds.push(role3._id);
 
       unauthorizedUser = (await UserModel.findOneAndUpdate(
         { phone: '+919333000003' },
@@ -142,6 +168,7 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       )) as InstanceType<typeof UserModel>;
+      if (unauthorizedUser) createdUserIds.push(unauthorizedUser._id);
       unauthorizedToken = tokenService.signAccessToken(unauthorizedUser);
 
       // 4. Customer User
@@ -155,6 +182,7 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       )) as InstanceType<typeof UserModel>;
+      if (customerUser) createdUserIds.push(customerUser._id);
       customerToken = tokenService.signAccessToken(customerUser);
 
       // 5. Partner User
@@ -167,6 +195,7 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       );
+      if (partnerDoc) createdPartnerIds.push(partnerDoc._id);
 
       partnerUser = (await UserModel.findOneAndUpdate(
         { phone: '+919333000005' },
@@ -179,6 +208,7 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       )) as InstanceType<typeof UserModel>;
+      if (partnerUser) createdUserIds.push(partnerUser._id);
       partnerToken = tokenService.signAccessToken(partnerUser);
     }
   });
@@ -899,41 +929,8 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
   // ============================================================================
   describe('Suite 9: Category Seed Execution & Safety (TASK 1)', () => {
     it('seeds physical construction material categories and excludes trade services', async () => {
-      // Clean seed categories before running seed test
-      await CategoryModel.deleteMany({
-        slug: {
-          $in: [
-            'services-contractors',
-            'electricians',
-            'plumbers',
-            'civil-construction',
-            'steel-structural',
-            'cement',
-            'sand-aggregates',
-            'bricks-blocks',
-            'tmt-rebars',
-            'binding-wire-mesh',
-            'plumbing-sanitaryware',
-            'cpvc-pipes-fittings',
-            'pvc-pipes-fittings',
-            'sanitaryware',
-            'electrical-lighting',
-            'modular-switches',
-            'wires-cables',
-            'led-lighting',
-            'paints-finishes',
-            'interior-emulsion',
-            'exterior-emulsion',
-            'waterproofing',
-            'flooring-tiles',
-            'vitrified-tiles',
-            'ceramic-wall-tiles',
-          ],
-        },
-      });
-
       const result1 = await runCategoriesSeed();
-      expect(result1.seeded).toBeGreaterThan(0);
+      expect(result1.seeded + result1.updated).toBeGreaterThan(0);
 
       // Verify physical construction materials exist
       const civil = await CategoryModel.findOne({ slug: 'civil-construction' });

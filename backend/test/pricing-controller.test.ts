@@ -51,6 +51,13 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
   let _secondaryVariant: InstanceType<typeof ProductVariantModel>;
   let draftProduct: InstanceType<typeof ProductModel>;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdProductIds: mongoose.Types.ObjectId[] = [];
+  const createdCategoryIds: mongoose.Types.ObjectId[] = [];
+  const createdServiceAreaIds: mongoose.Types.ObjectId[] = [];
+  const createdRoleIds: mongoose.Types.ObjectId[] = [];
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -65,23 +72,8 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
     if (isDbConnected) {
       await seedApprovedUnits();
 
-      // Clean test collections
-      await ProductPricingModel.deleteMany({});
-      await PriceHistoryModel.collection.deleteMany({});
-      await ProductModel.deleteMany({ slug: { $regex: /^ctrl-test-/ } });
-      await ProductVariantModel.deleteMany({});
-      await ServiceAreaModel.deleteMany({
-        $or: [
-          { code: { $regex: /^CTRL_TEST_/ } },
-          { pincodes: { $in: ['600001', '600002', '600003'] } },
-        ],
-      });
-      await CategoryModel.deleteMany({ slug: { $regex: /^ctrl-test-/ } });
-      await UserModel.deleteMany({ phone: { $regex: /^\+919888/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^CTRL_TEST_/ } });
-
       // Seed Roles
-      await RoleModel.create([
+      const seededRoles = await RoleModel.create([
         {
           code: 'CTRL_TEST_PRICING_ADMIN',
           name: 'Pricing Administrator Role',
@@ -108,6 +100,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
           permissions: [PermissionCode.CATALOG_READ],
         },
       ]);
+      createdRoleIds.push(...seededRoles.map((r) => r._id));
 
       // Seed Users
       pricingAdminUser = await UserModel.create({
@@ -117,6 +110,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
         status: UserStatus.ACTIVE,
         roles: ['CTRL_TEST_PRICING_ADMIN'],
       });
+      createdUserIds.push(pricingAdminUser._id);
       pricingAdminToken = tokenService.signAccessToken(pricingAdminUser);
 
       pricingViewerUser = await UserModel.create({
@@ -126,6 +120,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
         status: UserStatus.ACTIVE,
         roles: ['CTRL_TEST_PRICING_VIEWER'],
       });
+      createdUserIds.push(pricingViewerUser._id);
       pricingViewerToken = tokenService.signAccessToken(pricingViewerUser);
 
       noPricingStaffUser = await UserModel.create({
@@ -135,6 +130,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
         status: UserStatus.ACTIVE,
         roles: ['CTRL_TEST_NO_PRICING'],
       });
+      createdUserIds.push(noPricingStaffUser._id);
       noPricingStaffToken = tokenService.signAccessToken(noPricingStaffUser);
 
       b2cCustomerUser = await UserModel.create({
@@ -144,6 +140,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
         status: UserStatus.ACTIVE,
         roles: [],
       });
+      createdUserIds.push(b2cCustomerUser._id);
       b2cCustomerToken = tokenService.signAccessToken(b2cCustomerUser);
 
       b2bCustomerUser = await UserModel.create({
@@ -153,6 +150,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
         status: UserStatus.ACTIVE,
         roles: ['B2B_CUSTOMER'],
       });
+      createdUserIds.push(b2bCustomerUser._id);
       b2bCustomerToken = tokenService.signAccessToken(b2bCustomerUser);
 
       suspendedB2bCustomerUser = await UserModel.create({
@@ -162,6 +160,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
         status: UserStatus.SUSPENDED,
         roles: ['B2B_CUSTOMER'],
       });
+      createdUserIds.push(suspendedB2bCustomerUser._id);
       suspendedB2bCustomerToken = tokenService.signAccessToken(suspendedB2bCustomerUser);
 
       partnerUser = await UserModel.create({
@@ -171,25 +170,53 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
         status: UserStatus.ACTIVE,
         roles: [],
       });
+      createdUserIds.push(partnerUser._id);
       partnerToken = tokenService.signAccessToken(partnerUser);
     }
   });
 
+  async function cleanTestFixtures(includeSuiteUsersAndRoles = false) {
+    if (!isDbConnected) return;
+
+    if (createdProductIds.length > 0) {
+      const prodIds = [...createdProductIds];
+      createdProductIds.length = 0;
+      await ProductPricingModel.deleteMany({ productId: { $in: prodIds } });
+      await PriceHistoryModel.deleteMany({ productId: { $in: prodIds } });
+      await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
+      await ProductModel.deleteMany({ _id: { $in: prodIds } });
+    }
+
+    if (createdServiceAreaIds.length > 0) {
+      const saIds = [...createdServiceAreaIds];
+      createdServiceAreaIds.length = 0;
+      await ServiceAreaModel.deleteMany({ _id: { $in: saIds } });
+    }
+
+    if (createdCategoryIds.length > 0) {
+      const catIds = [...createdCategoryIds];
+      createdCategoryIds.length = 0;
+      await CategoryModel.deleteMany({ _id: { $in: catIds } });
+    }
+
+    if (includeSuiteUsersAndRoles) {
+      if (createdUserIds.length > 0) {
+        const uIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await UserModel.deleteMany({ _id: { $in: uIds } });
+      }
+
+      if (createdRoleIds.length > 0) {
+        const rIds = [...createdRoleIds];
+        createdRoleIds.length = 0;
+        await RoleModel.deleteMany({ _id: { $in: rIds } });
+      }
+    }
+  }
+
   afterAll(async () => {
     if (isDbConnected) {
-      await ProductPricingModel.deleteMany({});
-      await PriceHistoryModel.collection.deleteMany({});
-      await ProductModel.deleteMany({ slug: { $regex: /^ctrl-test-/ } });
-      await ProductVariantModel.deleteMany({});
-      await ServiceAreaModel.deleteMany({
-        $or: [
-          { code: { $regex: /^CTRL_TEST_/ } },
-          { pincodes: { $in: ['600001', '600002', '600003'] } },
-        ],
-      });
-      await CategoryModel.deleteMany({ slug: { $regex: /^ctrl-test-/ } });
-      await UserModel.deleteMany({ phone: { $regex: /^\+919888/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^CTRL_TEST_/ } });
+      await cleanTestFixtures(true);
       await disconnectDatabase();
     }
   });
@@ -197,17 +224,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
   beforeEach(async () => {
     if (!isDbConnected) return;
 
-    await ProductPricingModel.deleteMany({});
-    await PriceHistoryModel.collection.deleteMany({});
-    await ProductModel.deleteMany({ slug: { $regex: /^ctrl-test-/ } });
-    await ProductVariantModel.deleteMany({});
-    await ServiceAreaModel.deleteMany({
-      $or: [
-        { code: { $regex: /^CTRL_TEST_/ } },
-        { pincodes: { $in: ['600001', '600002', '600003'] } },
-      ],
-    });
-    await CategoryModel.deleteMany({ slug: { $regex: /^ctrl-test-/ } });
+    await cleanTestFixtures(false);
 
     // Seed Category
     testCategory = await CategoryModel.create({
@@ -218,6 +235,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
       isActive: true,
       version: 0,
     });
+    createdCategoryIds.push(testCategory._id);
 
     // Seed Service Area (with pincode 600001)
     activeServiceArea = await ServiceAreaModel.create({
@@ -230,6 +248,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
       isActive: true,
       version: 0,
     });
+    createdServiceAreaIds.push(activeServiceArea._id);
 
     // Seed Standalone Active Product
     standaloneProduct = await ProductModel.create({
@@ -250,6 +269,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
       updatedBy: pricingAdminUser._id,
       publishedBy: pricingAdminUser._id,
     });
+    createdProductIds.push(standaloneProduct._id);
 
     // Seed Multi-Variant Parent Product
     multiVariantProduct = await ProductModel.create({
@@ -270,6 +290,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
       updatedBy: pricingAdminUser._id,
       publishedBy: pricingAdminUser._id,
     });
+    createdProductIds.push(multiVariantProduct._id);
 
     // Seed Child Variant 1
     activeVariant = await ProductVariantModel.create({
@@ -321,6 +342,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
       createdBy: pricingAdminUser._id,
       updatedBy: pricingAdminUser._id,
     });
+    createdProductIds.push(draftProduct._id);
   });
 
   // =========================================================================
@@ -545,6 +567,7 @@ describe('Milestone 4 Step 5: Substep 5.6 — Pricing Controllers, Express Route
         createdBy: pricingAdminUser._id,
         updatedBy: pricingAdminUser._id,
       });
+      createdProductIds.push(foreignProduct._id);
 
       const res = await request(app)
         .put(`/api/v1/products/${foreignProduct._id}/variants/${activeVariant._id}/pricing`)

@@ -5,13 +5,13 @@ import { seedApprovedUnits, APPROVED_UNITS } from '../src/seeds/units.seed.js';
 
 describe('Substep 4.2: Unit Master Model & Idempotent Seeding', () => {
   let isDbConnected = false;
+  const createdUnitIds: any[] = [];
 
   beforeAll(async () => {
     try {
       await connectDatabase();
       isDbConnected = true;
       if (isDbConnected) {
-        await UnitModel.deleteMany({});
         await UnitModel.syncIndexes();
       }
     } catch (err) {
@@ -21,6 +21,10 @@ describe('Substep 4.2: Unit Master Model & Idempotent Seeding', () => {
 
   afterAll(async () => {
     if (isDbConnected) {
+      if (createdUnitIds.length > 0) {
+        await UnitModel.deleteMany({ _id: { $in: createdUnitIds } });
+        createdUnitIds.length = 0;
+      }
       await disconnectDatabase();
     }
   });
@@ -28,14 +32,12 @@ describe('Substep 4.2: Unit Master Model & Idempotent Seeding', () => {
   it('idempotently seeds the 9 approved construction units', async () => {
     if (!isDbConnected) return;
 
-    await UnitModel.deleteMany({});
-
     // First seed run
     const firstResult = await seedApprovedUnits();
-    expect(firstResult.upsertedCount).toBe(9);
+    expect(firstResult.upsertedCount + firstResult.matchedCount).toBe(9);
 
     const count = await UnitModel.countDocuments();
-    expect(count).toBe(9);
+    expect(count).toBeGreaterThanOrEqual(9);
 
     // Verify all 9 approved units exist with correct classification and allowedMaxPrecision
     for (const approved of APPROVED_UNITS) {
@@ -55,7 +57,7 @@ describe('Substep 4.2: Unit Master Model & Idempotent Seeding', () => {
     expect(secondResult.matchedCount).toBe(9);
 
     const secondCount = await UnitModel.countDocuments();
-    expect(secondCount).toBe(9);
+    expect(secondCount).toBe(count);
   });
 
   it('enforces discrete unit invariants on pre-validate hook', async () => {
@@ -107,6 +109,7 @@ describe('Substep 4.2: Unit Master Model & Idempotent Seeding', () => {
       allowedMaxPrecision: 3,
     });
     await unit1.save();
+    createdUnitIds.push(unit1._id);
 
     const unit2 = new UnitModel({
       code: 'TEST_UNIQUE',
@@ -121,6 +124,6 @@ describe('Substep 4.2: Unit Master Model & Idempotent Seeding', () => {
 
     await expect(unit2.save()).rejects.toThrow();
 
-    await UnitModel.deleteOne({ code: 'TEST_UNIQUE' });
+    await UnitModel.deleteOne({ _id: unit1._id });
   });
 });

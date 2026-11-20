@@ -57,6 +57,14 @@ describe('Stage C-8B.1: Admin Partner Management Security, Transaction & Regress
   let activePartnerUserToken: string;
   let suspendedPartnerUser: IUserDocument;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdPartnerIds: Types.ObjectId[] = [];
+  const createdUserIds: Types.ObjectId[] = [];
+  const createdTokenIds: Types.ObjectId[] = [];
+  const createdOtpIds: Types.ObjectId[] = [];
+  const createdRoleIds: Types.ObjectId[] = [];
+  const createdServiceAreaIds: Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase(undefined, { serverSelectionTimeoutMS: 30000 });
@@ -71,16 +79,22 @@ describe('Stage C-8B.1: Admin Partner Management Security, Transaction & Regress
     app = createApp();
 
     if (isDbConnected) {
-      // Clean up previous test artifacts
-      await Promise.all([
-        UserModel.deleteMany({ phone: { $regex: /^\+919977/ } }),
-        RoleModel.deleteMany({ code: { $regex: /^TEST_ADMIN_PARTNER_/ } }),
-        ServiceAreaModel.deleteMany({ code: { $regex: /^TEST-PARTNER-SA/ } }),
-        PartnerModel.deleteMany({ phone: { $regex: /^\+919977/ } }),
-        RefreshTokenModel.deleteMany({ tokenHash: { $regex: /^dummy_active_part_refresh/ } }),
-        PartnerAuditLogModel.collection.deleteMany({}),
-        PhoneOtpModel.deleteMany({ phone: { $regex: /^\+919977/ } }),
-      ]);
+      // Attach post-save hooks to track all created documents in this suite
+      PartnerModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdPartnerIds.push(doc._id);
+      });
+      UserModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdUserIds.push(doc._id);
+      });
+      RefreshTokenModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdTokenIds.push(doc._id);
+      });
+      PhoneOtpModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdOtpIds.push(doc._id);
+      });
+      ServiceAreaModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdServiceAreaIds.push(doc._id);
+      });
 
       // 1. Service Area
       testServiceArea = await ServiceAreaModel.create({
@@ -93,7 +107,7 @@ describe('Stage C-8B.1: Admin Partner Management Security, Transaction & Regress
       });
 
       // 2. Roles
-      await RoleModel.create([
+      const seededRoles = await RoleModel.create([
         {
           code: 'TEST_ADMIN_PARTNER_SUPER',
           name: 'Super Admin Partner Role',
@@ -137,6 +151,7 @@ describe('Stage C-8B.1: Admin Partner Management Security, Transaction & Regress
           permissions: [PermissionCode.PARTNER_AVAILABILITY_READ],
         },
       ]);
+      createdRoleIds.push(...seededRoles.map((r: any) => r._id));
 
       // 3. Test Partners
       activePartner = await PartnerModel.create({
@@ -270,15 +285,45 @@ describe('Stage C-8B.1: Admin Partner Management Security, Transaction & Regress
 
   afterAll(async () => {
     if (isDbConnected) {
-      await Promise.all([
-        UserModel.deleteMany({ phone: { $regex: /^\+919977/ } }),
-        RoleModel.deleteMany({ code: { $regex: /^TEST_ADMIN_PARTNER_/ } }),
-        ServiceAreaModel.deleteMany({ code: { $regex: /^TEST-PARTNER-SA/ } }),
-        PartnerModel.deleteMany({ phone: { $regex: /^\+919977/ } }),
-        RefreshTokenModel.deleteMany({ tokenHash: { $regex: /^dummy_active_part_refresh/ } }),
-        PartnerAuditLogModel.collection.deleteMany({}),
-        PhoneOtpModel.deleteMany({ phone: { $regex: /^\+919977/ } }),
-      ]);
+      if (createdPartnerIds.length > 0) {
+        const partnerIds = [...createdPartnerIds];
+        createdPartnerIds.length = 0;
+        await PartnerAuditLogModel.deleteMany({ partnerId: { $in: partnerIds } });
+        await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
+      }
+
+      if (createdTokenIds.length > 0) {
+        const tokenIds = [...createdTokenIds];
+        createdTokenIds.length = 0;
+        await RefreshTokenModel.deleteMany({ _id: { $in: tokenIds } });
+      }
+
+      if (createdUserIds.length > 0) {
+        const userIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await RefreshTokenModel.deleteMany({ userId: { $in: userIds } });
+        await UserModel.deleteMany({ _id: { $in: userIds } });
+      }
+
+      if (createdOtpIds.length > 0) {
+        const otpIds = [...createdOtpIds];
+        createdOtpIds.length = 0;
+        await PhoneOtpModel.deleteMany({ _id: { $in: otpIds } });
+      }
+
+      if (createdServiceAreaIds.length > 0) {
+        const saIds = [...createdServiceAreaIds];
+        createdServiceAreaIds.length = 0;
+        await ServiceAreaModel.deleteMany({ _id: { $in: saIds } });
+      }
+
+      if (createdRoleIds.length > 0) {
+        const roleIds = [...createdRoleIds];
+        createdRoleIds.length = 0;
+        await RoleModel.deleteMany({ _id: { $in: roleIds } });
+      }
+
+      await disconnectDatabase();
     }
   });
 

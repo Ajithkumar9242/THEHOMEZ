@@ -45,14 +45,6 @@ describe('Milestone 4 Step 6: Subtask 6.2 — Partner Product Availability Model
     await connectDatabase();
     isDbConnected = true;
 
-    // Clean test data
-    await PartnerProductModel.collection.deleteMany({});
-    await PartnerAvailabilityHistoryModel.collection.deleteMany({});
-    await ProductVariantModel.collection.deleteMany({ sku: { $regex: /^TEST-AVAIL-/ } });
-    await ProductModel.collection.deleteMany({ slug: { $regex: /^test-avail-/ } });
-    await PartnerModel.collection.deleteMany({ phone: { $regex: /^\+9198765/ } });
-    await ServiceAreaModel.collection.deleteMany({ code: { $regex: /^TEST-SA-AVAIL-/ } });
-
     // Sync authoritative indexes
     await PartnerProductModel.syncIndexes();
     await PartnerAvailabilityHistoryModel.syncIndexes();
@@ -218,12 +210,28 @@ describe('Milestone 4 Step 6: Subtask 6.2 — Partner Product Availability Model
 
   afterAll(async () => {
     if (isDbConnected) {
-      await PartnerProductModel.collection.deleteMany({});
-      await PartnerAvailabilityHistoryModel.collection.deleteMany({});
-      await ProductVariantModel.collection.deleteMany({ sku: { $regex: /^TEST-AVAIL-/ } });
-      await ProductModel.collection.deleteMany({ slug: { $regex: /^test-avail-/ } });
-      await PartnerModel.collection.deleteMany({ phone: { $regex: /^\+9198765/ } });
-      await ServiceAreaModel.collection.deleteMany({ code: { $regex: /^TEST-SA-AVAIL-/ } });
+      const partnerIds = [activePartner1?._id, suspendedPartner?._id].filter(Boolean);
+      const productIds = [
+        activeStandaloneProduct1?._id,
+        activeStandaloneProduct2?._id,
+        draftStandaloneProduct?._id,
+        activeMultiVariantParent?._id,
+        foreignMultiVariantParent?._id,
+      ].filter(Boolean);
+      const areaIds = [activeServiceArea1?._id, activeServiceArea2?._id, inactiveServiceArea?._id].filter(Boolean);
+
+      if (partnerIds.length > 0) {
+        await PartnerProductModel.deleteMany({ partnerId: { $in: partnerIds } });
+        await PartnerAvailabilityHistoryModel.deleteMany({ partnerId: { $in: partnerIds } });
+        await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
+      }
+      if (productIds.length > 0) {
+        await ProductVariantModel.deleteMany({ productId: { $in: productIds } });
+        await ProductModel.deleteMany({ _id: { $in: productIds } });
+      }
+      if (areaIds.length > 0) {
+        await ServiceAreaModel.deleteMany({ _id: { $in: areaIds } });
+      }
       await disconnectDatabase();
     }
   });

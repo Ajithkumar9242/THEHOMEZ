@@ -1,9 +1,23 @@
 import mongoose, { type ConnectOptions } from 'mongoose';
 import { getConfig } from '../config/env.js';
 import { logger } from '../logger/logger.js';
+import {
+  validateTestDatabaseTarget,
+  verifyConnectedDatabaseDiagnostics,
+  registerTestDeletionSafetyHooks,
+  TestDatabaseIsolationError,
+} from './test-guard.js';
+
+export {
+  validateTestDatabaseTarget,
+  verifyConnectedDatabaseDiagnostics,
+  registerTestDeletionSafetyHooks,
+  TestDatabaseIsolationError,
+};
 
 let isConnecting = false;
 let listenersRegistered = false;
+let deletionSafetyHooksRegistered = false;
 
 /**
  * Strips user credentials and query credentials from a MongoDB URI for safe logging.
@@ -97,6 +111,7 @@ export async function connectDatabase(
 ): Promise<typeof mongoose> {
   const config = getConfig();
   const uri = customUri || config.mongodb.uri;
+  const isTest = config.isTest || process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
 
   registerConnectionLifecycle();
 
@@ -108,6 +123,15 @@ export async function connectDatabase(
   if (isConnecting) {
     logger.debug('MongoDB connection already in progress, awaiting resolution...');
     return mongoose;
+  }
+
+  let validatedTestDb: { databaseName: string; isRemote: boolean } | null = null;
+  if (isTest) {
+    if (!deletionSafetyHooksRegistered) {
+      registerTestDeletionSafetyHooks(mongoose);
+      deletionSafetyHooksRegistered = true;
+    }
+    validatedTestDb = validateTestDatabaseTarget(uri, customOptions);
   }
 
   const options: ConnectOptions = {
@@ -136,6 +160,22 @@ export async function connectDatabase(
 
     const connection = await mongoose.connect(uri, options);
     isConnecting = false;
+
+    // In test mode: verify connected database diagnostics fail-closed
+    if (isTest && validatedTestDb) {
+      try {
+        const diagnostics = getDatabaseDiagnostics();
+        verifyConnectedDatabaseDiagnostics(diagnostics, validatedTestDb.databaseName);
+      } catch (verificationError) {
+        try {
+          await mongoose.disconnect();
+        } catch {
+          // Ignore secondary disconnect errors
+        }
+        throw verificationError;
+      }
+    }
+
     return connection;
   } catch (error) {
     isConnecting = false;

@@ -39,6 +39,12 @@ describe('Milestone 5A.1 Backend Authentication Security Remediation Test Suite'
 
   let preProvisionedCustomer: IUserDocument;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
+  const createdTokenIds: mongoose.Types.ObjectId[] = [];
+  const createdOtpIds: mongoose.Types.ObjectId[] = [];
+  const createdLockoutIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -51,10 +57,18 @@ describe('Milestone 5A.1 Backend Authentication Security Remediation Test Suite'
     otpService = new OtpService(new MockOtpProvider());
 
     if (isDbConnected) {
-      await UserModel.deleteMany({ phone: { $regex: /^\+9197777/ } });
-      await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+9197777/ } });
-      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+9197777/ } });
-      await RefreshTokenModel.deleteMany({});
+      UserModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdUserIds.push(doc._id);
+      });
+      RefreshTokenModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdTokenIds.push(doc._id);
+      });
+      PhoneOtpModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdOtpIds.push(doc._id);
+      });
+      OtpLockoutModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdLockoutIds.push(doc._id);
+      });
 
       preProvisionedCustomer = await UserModel.create({
         phone: cookieUserPhone,
@@ -73,9 +87,27 @@ describe('Milestone 5A.1 Backend Authentication Security Remediation Test Suite'
 
   afterAll(async () => {
     if (isDbConnected) {
-      await UserModel.deleteMany({ phone: { $regex: /^\+9197777/ } });
-      await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+9197777/ } });
-      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+9197777/ } });
+      if (createdTokenIds.length > 0) {
+        const tIds = [...createdTokenIds];
+        createdTokenIds.length = 0;
+        await RefreshTokenModel.deleteMany({ _id: { $in: tIds } });
+      }
+      if (createdUserIds.length > 0) {
+        const uIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await RefreshTokenModel.deleteMany({ userId: { $in: uIds } });
+        await UserModel.deleteMany({ _id: { $in: uIds } });
+      }
+      if (createdOtpIds.length > 0) {
+        const oIds = [...createdOtpIds];
+        createdOtpIds.length = 0;
+        await PhoneOtpModel.deleteMany({ _id: { $in: oIds } });
+      }
+      if (createdLockoutIds.length > 0) {
+        const lIds = [...createdLockoutIds];
+        createdLockoutIds.length = 0;
+        await OtpLockoutModel.deleteMany({ _id: { $in: lIds } });
+      }
       await disconnectDatabase();
     }
   });

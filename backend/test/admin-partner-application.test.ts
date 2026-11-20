@@ -49,6 +49,13 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
   let saBeta: IServiceAreaDocument;
   let _saGamma: IServiceAreaDocument;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdAppIds: Types.ObjectId[] = [];
+  const createdPartnerIds: Types.ObjectId[] = [];
+  const createdUserIds: Types.ObjectId[] = [];
+  const createdServiceAreaIds: Types.ObjectId[] = [];
+  const createdRoleIds: Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase(undefined, { serverSelectionTimeoutMS: 30000 });
@@ -62,20 +69,19 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
     app = createApp();
 
     if (isDbConnected) {
-      // Clean up previous test artifacts
-      await Promise.all([
-        UserModel.deleteMany({ phone: { $regex: /^\+919666/ } }),
-        RoleModel.deleteMany({ code: { $regex: /^TEST_APP_/ } }),
-        ServiceAreaModel.deleteMany({ code: { $regex: /^TEST-/ } }),
-        PartnerModel.deleteMany({
-          $or: [
-            { phone: { $regex: /^\+919666/ } },
-            { businessName: { $regex: /Test|Scenario|Candidate|Partner|Vendor/i } },
-          ],
-        }),
-        PartnerApplicationModel.deleteMany({}),
-        PartnerAuditLogModel.collection.deleteMany({}),
-      ]);
+      // Attach post-save hooks to track all created documents in this suite
+      ServiceAreaModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdServiceAreaIds.push(doc._id);
+      });
+      PartnerApplicationModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdAppIds.push(doc._id);
+      });
+      PartnerModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdPartnerIds.push(doc._id);
+      });
+      UserModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdUserIds.push(doc._id);
+      });
 
       // 1. Create Test Service Areas
       saAlpha = await ServiceAreaModel.create({
@@ -106,7 +112,7 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
       });
 
       // 2. Create Test Roles
-      await RoleModel.create([
+      const seededRoles = await RoleModel.create([
         {
           code: 'TEST_APP_SUPER',
           name: 'Super Admin Application Test',
@@ -150,6 +156,7 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
           permissions: [PermissionCode.PARTNER_AVAILABILITY_READ],
         },
       ]);
+      createdRoleIds.push(...seededRoles.map((r: any) => r._id));
 
       // 3. Create Staff Users & Tokens
       superAdminUser = await UserModel.create({
@@ -1722,19 +1729,37 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
 
   afterAll(async () => {
     if (isDbConnected) {
-      await Promise.all([
-        UserModel.deleteMany({ phone: { $regex: /^\+919666/ } }),
-        RoleModel.deleteMany({ code: { $regex: /^TEST_APP_/ } }),
-        ServiceAreaModel.deleteMany({ code: { $regex: /^TEST-/ } }),
-        PartnerModel.deleteMany({
-          $or: [
-            { phone: { $regex: /^\+919666/ } },
-            { businessName: { $regex: /Test|Scenario|Candidate|Partner|Vendor/i } },
-          ],
-        }),
-        PartnerApplicationModel.deleteMany({}),
-        PartnerAuditLogModel.collection.deleteMany({}),
-      ]);
+      if (createdPartnerIds.length > 0) {
+        const partnerIds = [...createdPartnerIds];
+        createdPartnerIds.length = 0;
+        await PartnerAuditLogModel.deleteMany({ partnerId: { $in: partnerIds } });
+        await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
+      }
+
+      if (createdAppIds.length > 0) {
+        const appIds = [...createdAppIds];
+        createdAppIds.length = 0;
+        await PartnerApplicationModel.deleteMany({ _id: { $in: appIds } });
+      }
+
+      if (createdUserIds.length > 0) {
+        const userIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await UserModel.deleteMany({ _id: { $in: userIds } });
+      }
+
+      if (createdServiceAreaIds.length > 0) {
+        const saIds = [...createdServiceAreaIds];
+        createdServiceAreaIds.length = 0;
+        await ServiceAreaModel.deleteMany({ _id: { $in: saIds } });
+      }
+
+      if (createdRoleIds.length > 0) {
+        const roleIds = [...createdRoleIds];
+        createdRoleIds.length = 0;
+        await RoleModel.deleteMany({ _id: { $in: roleIds } });
+      }
+
       await disconnectDatabase();
     }
   });

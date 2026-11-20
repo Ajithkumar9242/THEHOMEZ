@@ -47,6 +47,9 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
   // Service Area Fixtures
   let _testServiceArea: InstanceType<typeof ServiceAreaModel>;
 
+  const createdUserIds: Types.ObjectId[] = [];
+  const createdRoleIds: Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase(undefined, { serverSelectionTimeoutMS: 30000 });
@@ -60,16 +63,6 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
     app = createApp();
 
     if (isDbConnected) {
-      // Clean up test data from previous runs in parallel
-      await Promise.all([
-        UserModel.deleteMany({ phone: { $regex: /^\+919988/ } }),
-        RoleModel.deleteMany({ code: { $regex: /^TEST_ADMIN_CUST_/ } }),
-        ServiceAreaModel.deleteMany({ code: { $regex: /^TEST-CUST-SA/ } }),
-        CustomerAddressModel.deleteMany({ phone: { $regex: /^\+919988/ } }),
-        RefreshTokenModel.deleteMany({ tokenHash: { $regex: /^dummy_active_refresh/ } }),
-        CustomerAuditLogModel.deleteMany({}),
-      ]);
-
       // 1. Service Area for Address enrichment
       _testServiceArea = await ServiceAreaModel.create({
         code: 'TEST-CUST-SA-1',
@@ -81,7 +74,7 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
       });
 
       // 2. Roles
-      await RoleModel.create([
+      const seededRoles = await RoleModel.create([
         {
           code: 'TEST_ADMIN_CUST_SUPER',
           name: 'Super Admin Test Role',
@@ -118,6 +111,7 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
           permissions: [PermissionCode.CATALOG_READ],
         },
       ]);
+      createdRoleIds.push(...seededRoles.map((r) => r._id));
 
       // 3. Batch Create Users (Staff, Partner, Customers) in a single round-trip
       const createdUsers = await UserModel.create([
@@ -258,18 +252,25 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
         isRevoked: false,
         expiresAt: new Date(Date.now() + 30 * 86400000),
       });
+
+      createdUserIds.push(...createdUsers.map((u) => u._id));
     }
   }, 120000);
 
   afterAll(async () => {
     if (isDbConnected) {
-      await Promise.all([
-        UserModel.deleteMany({ phone: { $regex: /^\+919988/ } }),
-        RoleModel.deleteMany({ code: { $regex: /^TEST_ADMIN_CUST_/ } }),
-        ServiceAreaModel.deleteMany({ code: { $regex: /^TEST-CUST-SA/ } }),
-        CustomerAddressModel.deleteMany({ phone: { $regex: /^\+919988/ } }),
-        CustomerAuditLogModel.deleteMany({}),
-      ]);
+      if (createdUserIds.length > 0) {
+        await CustomerAuditLogModel.deleteMany({ targetUserId: { $in: createdUserIds } });
+        await CustomerAddressModel.deleteMany({ userId: { $in: createdUserIds } });
+        await RefreshTokenModel.deleteMany({ userId: { $in: createdUserIds } });
+        await UserModel.deleteMany({ _id: { $in: createdUserIds } });
+      }
+      if (_testServiceArea?._id) {
+        await ServiceAreaModel.deleteMany({ _id: _testServiceArea._id });
+      }
+      if (createdRoleIds.length > 0) {
+        await RoleModel.deleteMany({ _id: { $in: createdRoleIds } });
+      }
       await disconnectDatabase();
     }
   }, 120000);

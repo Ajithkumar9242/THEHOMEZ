@@ -40,6 +40,12 @@ describe('Milestone 4 Step 1: Service Area Management & Coverage', () => {
   let partnerBToken: string;
   let partnerBDoc: IPartnerDocument;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdServiceAreaIds: mongoose.Types.ObjectId[] = [];
+  const createdRoleIds: mongoose.Types.ObjectId[] = [];
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
+  const createdPartnerIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -52,14 +58,12 @@ describe('Milestone 4 Step 1: Service Area Management & Coverage', () => {
     app = createApp();
 
     if (isDbConnected) {
-      // Clean up previous test artifacts
-      await ServiceAreaModel.deleteMany({ code: { $regex: /^(TEST-SA-|BLR-)/ } });
-      await PartnerModel.deleteMany({ businessName: { $regex: /^Test Partner/ } });
-      await UserModel.deleteMany({ phone: { $regex: /^\+9197777/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^SA_TEST_/ } });
+      ServiceAreaModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdServiceAreaIds.push(doc._id);
+      });
 
       // 1. Create Admin Role & User
-      await RoleModel.create({
+      const adminRole = await RoleModel.create({
         code: 'SA_TEST_ADMIN',
         name: 'Service Area Administrator Test',
         userType: UserType.STAFF,
@@ -73,6 +77,7 @@ describe('Milestone 4 Step 1: Service Area Management & Coverage', () => {
           PermissionCode.CATALOG_WRITE,
         ],
       });
+      createdRoleIds.push(adminRole._id);
 
       adminUser = await UserModel.create({
         phone: '+919777700001',
@@ -80,16 +85,18 @@ describe('Milestone 4 Step 1: Service Area Management & Coverage', () => {
         status: UserStatus.ACTIVE,
         roles: ['SA_TEST_ADMIN'],
       });
+      createdUserIds.push(adminUser._id);
       adminToken = tokenService.signAccessToken(adminUser);
 
       // 2. Create Unauthorized Staff User (lacks service area permissions)
-      await RoleModel.create({
+      const unauthRole = await RoleModel.create({
         code: 'SA_TEST_UNAUTH',
         name: 'Service Area Unauthorized Test',
         userType: UserType.STAFF,
         isSystemManaged: false,
         permissions: [PermissionCode.CUSTOMER_READ],
       });
+      createdRoleIds.push(unauthRole._id);
 
       unauthorizedUser = await UserModel.create({
         phone: '+919777700002',
@@ -97,6 +104,7 @@ describe('Milestone 4 Step 1: Service Area Management & Coverage', () => {
         status: UserStatus.ACTIVE,
         roles: ['SA_TEST_UNAUTH'],
       });
+      createdUserIds.push(unauthorizedUser._id);
       unauthorizedToken = tokenService.signAccessToken(unauthorizedUser);
 
       // 3. Create Partner A
@@ -106,6 +114,7 @@ describe('Milestone 4 Step 1: Service Area Management & Coverage', () => {
         phone: '+919777700010',
         status: 'ACTIVE',
       });
+      createdPartnerIds.push(partnerADoc._id);
 
       partnerAUser = await UserModel.create({
         phone: '+919777700010',
@@ -114,6 +123,7 @@ describe('Milestone 4 Step 1: Service Area Management & Coverage', () => {
         partnerId: partnerADoc._id,
         roles: [],
       });
+      createdUserIds.push(partnerAUser._id);
       partnerAToken = tokenService.signAccessToken(partnerAUser);
 
       // 4. Create Partner B
@@ -123,6 +133,7 @@ describe('Milestone 4 Step 1: Service Area Management & Coverage', () => {
         phone: '+919777700020',
         status: 'ACTIVE',
       });
+      createdPartnerIds.push(partnerBDoc._id);
 
       partnerBUser = await UserModel.create({
         phone: '+919777700020',
@@ -131,23 +142,44 @@ describe('Milestone 4 Step 1: Service Area Management & Coverage', () => {
         partnerId: partnerBDoc._id,
         roles: [],
       });
+      createdUserIds.push(partnerBUser._id);
       partnerBToken = tokenService.signAccessToken(partnerBUser);
     }
   });
 
   afterAll(async () => {
     if (isDbConnected) {
-      await ServiceAreaModel.deleteMany({ code: { $regex: /^(TEST-SA-|BLR-)/ } });
-      await PartnerModel.deleteMany({ businessName: { $regex: /^Test Partner/ } });
-      await UserModel.deleteMany({ phone: { $regex: /^\+9197777/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^SA_TEST_/ } });
+      if (createdServiceAreaIds.length > 0) {
+        const saIds = [...createdServiceAreaIds];
+        createdServiceAreaIds.length = 0;
+        await ServiceAreaModel.deleteMany({ _id: { $in: saIds } });
+      }
+      if (createdPartnerIds.length > 0) {
+        const pIds = [...createdPartnerIds];
+        createdPartnerIds.length = 0;
+        await PartnerModel.deleteMany({ _id: { $in: pIds } });
+      }
+      if (createdUserIds.length > 0) {
+        const uIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await UserModel.deleteMany({ _id: { $in: uIds } });
+      }
+      if (createdRoleIds.length > 0) {
+        const rIds = [...createdRoleIds];
+        createdRoleIds.length = 0;
+        await RoleModel.deleteMany({ _id: { $in: rIds } });
+      }
       await disconnectDatabase();
     }
   });
 
   beforeEach(async () => {
     if (isDbConnected) {
-      await ServiceAreaModel.deleteMany({ code: { $regex: /^(TEST-SA-|BLR-)/ } });
+      if (createdServiceAreaIds.length > 0) {
+        const saIds = [...createdServiceAreaIds];
+        createdServiceAreaIds.length = 0;
+        await ServiceAreaModel.deleteMany({ _id: { $in: saIds } });
+      }
 
       // Ensure SA_TEST_ADMIN role exists in case another concurrent suite purged roles
       await RoleModel.updateOne(

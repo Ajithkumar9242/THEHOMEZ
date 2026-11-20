@@ -33,6 +33,7 @@ const rawEnvSchema = z
       .default('/api/v1'),
     CORS_ORIGIN: z.string().optional(),
     MONGODB_URI: z.string().optional(),
+    MONGODB_TEST_URI: z.string().optional(),
     MONGODB_MIN_POOL_SIZE: z.coerce
       .number()
       .int()
@@ -310,10 +311,27 @@ export function validateConfig(rawEnv: Record<string, unknown> = process.env): A
 
   // Process MongoDB URI default based on environment
   const defaultDevUri = 'mongodb://127.0.0.1:27017/thehomez?replicaSet=rs0&directConnection=true';
-  const mongoUri =
-    data.MONGODB_URI && data.MONGODB_URI.trim().length > 0
-      ? data.MONGODB_URI.trim()
-      : defaultDevUri;
+  let mongoUri: string;
+
+  if (data.NODE_ENV === 'test') {
+    // In test mode: NEVER fall back to dev database ('thehomez') or inherit remote Atlas URI silently.
+    // Explicit test database selection via MONGODB_TEST_URI or TEST_MONGODB_URI is required.
+    const explicitTestUri =
+      data.MONGODB_TEST_URI ||
+      (typeof rawEnv.TEST_MONGODB_URI === 'string' ? rawEnv.TEST_MONGODB_URI : undefined);
+    if (explicitTestUri && explicitTestUri.trim().length > 0) {
+      mongoUri = explicitTestUri.trim();
+    } else {
+      // No explicit test database configured: leave empty so tests fail closed if connectDatabase()
+      // is attempted without an isolated test database. Ordinary unit tests remain safe and unaffected.
+      mongoUri = '';
+    }
+  } else {
+    mongoUri =
+      data.MONGODB_URI && data.MONGODB_URI.trim().length > 0
+        ? data.MONGODB_URI.trim()
+        : defaultDevUri;
+  }
 
   // Distinct dev/test fallback secrets (>= 32 characters, unique, safe for dev and test)
   const defaultDevJwtAccessSecret = 'dev_thehomez_jwt_access_secret_min_32_characters_1234!';

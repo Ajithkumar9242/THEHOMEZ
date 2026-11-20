@@ -36,6 +36,13 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
   // Test Service Area
   let testServiceArea: InstanceType<typeof ServiceAreaModel>;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdProductIds: mongoose.Types.ObjectId[] = [];
+  const createdCategoryIds: mongoose.Types.ObjectId[] = [];
+  const createdServiceAreaIds: mongoose.Types.ObjectId[] = [];
+  const createdRoleIds: mongoose.Types.ObjectId[] = [];
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -49,7 +56,6 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
 
     if (isDbConnected) {
       await seedApprovedUnits();
-      await cleanDatabase();
     }
   });
 
@@ -61,15 +67,45 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
   });
 
   async function cleanDatabase() {
-    await ProductModel.deleteMany({ slug: { $regex: /^test-/ } });
-    await ProductVariantModel.deleteMany({});
-    await SkuRegistryModel.deleteMany({ sku: { $regex: /^THZ-/ } });
-    await ProductPricingModel.deleteMany({});
-    await mongoose.connection.collection('price_history').deleteMany({});
-    await CategoryModel.deleteMany({ slug: { $regex: /^test-/ } });
-    await UserModel.deleteMany({ phone: { $regex: /^\+919666/ } });
-    await RoleModel.deleteMany({ code: { $regex: /^LIFECYCLE_TEST_/ } });
-    await ServiceAreaModel.deleteMany({ code: { $regex: /^TEST-SA-/ } });
+    if (!isDbConnected) return;
+
+    // 1. Cascade delete pricings, price histories, variants, and products ONLY for tracked test products
+    if (createdProductIds.length > 0) {
+      const prodIds = [...createdProductIds];
+      createdProductIds.length = 0;
+      await ProductPricingModel.deleteMany({ productId: { $in: prodIds } });
+      await mongoose.connection.collection('price_history').deleteMany({ productId: { $in: prodIds } });
+      await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
+      await ProductModel.deleteMany({ _id: { $in: prodIds } });
+    }
+
+    // 2. Delete only tracked test categories created by this suite
+    if (createdCategoryIds.length > 0) {
+      const catIds = [...createdCategoryIds];
+      createdCategoryIds.length = 0;
+      await CategoryModel.deleteMany({ _id: { $in: catIds } });
+    }
+
+    // 3. Delete only tracked test service areas created by this suite
+    if (createdServiceAreaIds.length > 0) {
+      const saIds = [...createdServiceAreaIds];
+      createdServiceAreaIds.length = 0;
+      await ServiceAreaModel.deleteMany({ _id: { $in: saIds } });
+    }
+
+    // 4. Delete only tracked test users created by this suite
+    if (createdUserIds.length > 0) {
+      const uIds = [...createdUserIds];
+      createdUserIds.length = 0;
+      await UserModel.deleteMany({ _id: { $in: uIds } });
+    }
+
+    // 5. Delete only tracked test roles created by this suite
+    if (createdRoleIds.length > 0) {
+      const rIds = [...createdRoleIds];
+      createdRoleIds.length = 0;
+      await RoleModel.deleteMany({ _id: { $in: rIds } });
+    }
   }
 
   beforeEach(async () => {
@@ -86,6 +122,7 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
       isActive: true,
       version: 0,
     });
+    createdCategoryIds.push(testRootCategory._id);
 
     testSubcategory = await CategoryModel.create({
       slug: 'test-lifecycle-sub',
@@ -96,6 +133,7 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
       isActive: true,
       version: 0,
     });
+    createdCategoryIds.push(testSubcategory._id);
 
     // 2. Seed Service Area
     testServiceArea = await ServiceAreaModel.create({
@@ -106,9 +144,10 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
       pincodes: ['560066', '560067'],
       isActive: true,
     });
+    createdServiceAreaIds.push(testServiceArea._id);
 
     // 3. Seed Roles & Principals
-    await RoleModel.findOneAndUpdate(
+    const role1 = await RoleModel.findOneAndUpdate(
       { code: 'LIFECYCLE_TEST_WRITER' },
       {
         code: 'LIFECYCLE_TEST_WRITER',
@@ -124,8 +163,9 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
       },
       { upsert: true, new: true },
     );
+    if (role1) createdRoleIds.push(role1._id);
 
-    await RoleModel.findOneAndUpdate(
+    const role2 = await RoleModel.findOneAndUpdate(
       { code: 'LIFECYCLE_TEST_PUBLISHER' },
       {
         code: 'LIFECYCLE_TEST_PUBLISHER',
@@ -142,6 +182,7 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
       },
       { upsert: true, new: true },
     );
+    if (role2) createdRoleIds.push(role2._id);
 
     catalogWriterUser = (await UserModel.findOneAndUpdate(
       { phone: '+919666000001' },
@@ -153,6 +194,7 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
+    if (catalogWriterUser) createdUserIds.push(catalogWriterUser._id);
 
     catalogPublisherUser = (await UserModel.findOneAndUpdate(
       { phone: '+919666000002' },
@@ -164,6 +206,7 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
+    if (catalogPublisherUser) createdUserIds.push(catalogPublisherUser._id);
 
     catalogWriterToken = tokenService.signAccessToken(catalogWriterUser);
     catalogPublisherToken = tokenService.signAccessToken(catalogPublisherUser);
@@ -187,7 +230,11 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
         stepIncrement: '1',
         images: ['https://assets.thehomez.in/standalone.webp'],
       });
-    return res.body.data.product;
+    const product = res.body?.data?.product;
+    if (product?._id) {
+      createdProductIds.push(new mongoose.Types.ObjectId(product._id));
+    }
+    return product;
   }
 
   // Helper to create a multi-variant parent draft product
@@ -208,7 +255,11 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
         stepIncrement: '1',
         images: ['https://assets.thehomez.in/parent.webp'],
       });
-    return res.body.data.product;
+    const product = res.body?.data?.product;
+    if (product?._id) {
+      createdProductIds.push(new mongoose.Types.ObjectId(product._id));
+    }
+    return product;
   }
 
   // Helper to seed active global pricing

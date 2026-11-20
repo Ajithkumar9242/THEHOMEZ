@@ -23,17 +23,15 @@ describe('Milestone 4 Step 5: Substep 5.2 — Database Models & Partial Unique I
   let otherProduct: IProductDocument;
   let otherVariant: IProductVariantDocument;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdProductIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
       isDbConnected = true;
 
       if (isDbConnected) {
-        await ProductPricingModel.collection.deleteMany({});
-        await PriceHistoryModel.collection.deleteMany({});
-        await ProductVariantModel.collection.deleteMany({ sku: { $regex: /^TEST-PRICE-/ } });
-        await ProductModel.collection.deleteMany({ slug: { $regex: /^test-price-/ } });
-
         await ProductPricingModel.syncIndexes();
         await PriceHistoryModel.syncIndexes();
 
@@ -50,6 +48,7 @@ describe('Milestone 4 Step 5: Substep 5.2 — Database Models & Partial Unique I
           createdBy: dummyUserId,
           updatedBy: dummyUserId,
         });
+        createdProductIds.push(standaloneProduct._id);
 
         // 2. Create a multi-variant parent container (hasVariants: true)
         multiVariantParent = await ProductModel.create({
@@ -64,6 +63,7 @@ describe('Milestone 4 Step 5: Substep 5.2 — Database Models & Partial Unique I
           createdBy: dummyUserId,
           updatedBy: dummyUserId,
         });
+        createdProductIds.push(multiVariantParent._id);
 
         // 3. Create a child variant belonging to multiVariantParent
         childVariant = await ProductVariantModel.create({
@@ -87,6 +87,7 @@ describe('Milestone 4 Step 5: Substep 5.2 — Database Models & Partial Unique I
           createdBy: dummyUserId,
           updatedBy: dummyUserId,
         });
+        createdProductIds.push(otherProduct._id);
 
         otherVariant = await ProductVariantModel.create({
           productId: otherProduct._id,
@@ -101,12 +102,22 @@ describe('Milestone 4 Step 5: Substep 5.2 — Database Models & Partial Unique I
     }
   });
 
+  async function cleanTestFixtures() {
+    if (!isDbConnected) return;
+
+    if (createdProductIds.length > 0) {
+      const prodIds = [...createdProductIds];
+      createdProductIds.length = 0;
+      await ProductPricingModel.deleteMany({ productId: { $in: prodIds } });
+      await PriceHistoryModel.deleteMany({ productId: { $in: prodIds } });
+      await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
+      await ProductModel.deleteMany({ _id: { $in: prodIds } });
+    }
+  }
+
   afterAll(async () => {
     if (isDbConnected) {
-      await ProductPricingModel.collection.deleteMany({});
-      await PriceHistoryModel.collection.deleteMany({});
-      await ProductVariantModel.collection.deleteMany({ sku: { $regex: /^TEST-PRICE-/ } });
-      await ProductModel.collection.deleteMany({ slug: { $regex: /^test-price-/ } });
+      await cleanTestFixtures();
       await disconnectDatabase();
     }
   });

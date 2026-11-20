@@ -46,6 +46,13 @@ describe('Milestone 4 Step 4: Construction Units, Quantity Rules & Validation Go
   let inactiveRootCategory: InstanceType<typeof CategoryModel>;
   let inactiveSubcategory: InstanceType<typeof CategoryModel>;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdProductIds: Types.ObjectId[] = [];
+  const createdCategoryIds: Types.ObjectId[] = [];
+  const createdRoleIds: Types.ObjectId[] = [];
+  const createdUserIds: Types.ObjectId[] = [];
+  const createdUnitIds: Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -58,17 +65,15 @@ describe('Milestone 4 Step 4: Construction Units, Quantity Rules & Validation Go
     app = createApp();
 
     if (isDbConnected) {
-      // 1. Initial cleanup
-      await UnitModel.deleteMany({});
       await seedApprovedUnits();
       await UnitModel.syncIndexes();
 
-      await ProductVariantModel.deleteMany({});
-      await ProductModel.deleteMany({ slug: { $regex: /^unit-test-/ } });
-      await SkuRegistryModel.deleteMany({ sku: { $regex: /^THZ-UNIT-/ } });
-      await CategoryModel.deleteMany({ slug: { $regex: /^unit-cat-/ } });
-      await UserModel.deleteMany({ phone: { $regex: /^\+919555/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^UNIT_TEST_/ } });
+      ProductModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdProductIds.push(doc._id);
+      });
+      UnitModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id && !doc.isSystem) createdUnitIds.push(doc._id);
+      });
 
       // 2. Roles Setup
       const writerRole = await RoleModel.create({
@@ -106,6 +111,7 @@ describe('Milestone 4 Step 4: Construction Units, Quantity Rules & Validation Go
         isSystemManaged: false,
         permissions: [],
       });
+      createdRoleIds.push(writerRole._id, publisherRole._id, readOnlyRole._id, customerRole._id);
 
       // 3. Users Setup
       catalogWriterUser = await UserModel.create({
@@ -151,6 +157,12 @@ describe('Milestone 4 Step 4: Construction Units, Quantity Rules & Validation Go
       });
       unauthorizedUser.permissions = [];
       unauthorizedToken = tokenService.signAccessToken(unauthorizedUser);
+      createdUserIds.push(
+        catalogWriterUser._id,
+        catalogPublisherUser._id,
+        catalogReadOnlyUser._id,
+        unauthorizedUser._id,
+      );
 
       // 4. Setup Hierarchical Categories
       testRootCategory = await CategoryModel.create({
@@ -196,17 +208,44 @@ describe('Milestone 4 Step 4: Construction Units, Quantity Rules & Validation Go
         updatedBy: catalogWriterUser._id,
         version: 0,
       });
+      createdCategoryIds.push(
+        testRootCategory._id,
+        testSubcategory._id,
+        inactiveRootCategory._id,
+        inactiveSubcategory._id,
+      );
     }
   });
 
   afterAll(async () => {
     if (isDbConnected) {
-      await ProductVariantModel.deleteMany({});
-      await ProductModel.deleteMany({ slug: { $regex: /^unit-test-/ } });
-      await SkuRegistryModel.deleteMany({ sku: { $regex: /^THZ-UNIT-/ } });
-      await CategoryModel.deleteMany({ slug: { $regex: /^unit-cat-/ } });
-      await UserModel.deleteMany({ phone: { $regex: /^\+919555/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^UNIT_TEST_/ } });
+      if (createdProductIds.length > 0) {
+        const prodIds = [...createdProductIds];
+        createdProductIds.length = 0;
+        await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
+        await SkuRegistryModel.deleteMany({ productId: { $in: prodIds } });
+        await ProductModel.deleteMany({ _id: { $in: prodIds } });
+      }
+      if (createdCategoryIds.length > 0) {
+        const catIds = [...createdCategoryIds];
+        createdCategoryIds.length = 0;
+        await CategoryModel.deleteMany({ _id: { $in: catIds } });
+      }
+      if (createdUserIds.length > 0) {
+        const userIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await UserModel.deleteMany({ _id: { $in: userIds } });
+      }
+      if (createdRoleIds.length > 0) {
+        const roleIds = [...createdRoleIds];
+        createdRoleIds.length = 0;
+        await RoleModel.deleteMany({ _id: { $in: roleIds } });
+      }
+      if (createdUnitIds.length > 0) {
+        const unitIds = [...createdUnitIds];
+        createdUnitIds.length = 0;
+        await UnitModel.deleteMany({ _id: { $in: unitIds } });
+      }
       await disconnectDatabase();
     }
   });
@@ -215,9 +254,13 @@ describe('Milestone 4 Step 4: Construction Units, Quantity Rules & Validation Go
     if (!isDbConnected) return;
 
     // Fast, lightweight reset of ephemeral products/variants created during tests
-    await ProductVariantModel.deleteMany({});
-    await ProductModel.deleteMany({ slug: { $regex: /^unit-test-/ } });
-    await SkuRegistryModel.deleteMany({ sku: { $regex: /^THZ-UNIT-/ } });
+    if (createdProductIds.length > 0) {
+      const prodIds = [...createdProductIds];
+      createdProductIds.length = 0;
+      await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
+      await SkuRegistryModel.deleteMany({ productId: { $in: prodIds } });
+      await ProductModel.deleteMany({ _id: { $in: prodIds } });
+    }
 
     // Ensure core units are active and default precision ceilings intact
     await UnitModel.updateMany(

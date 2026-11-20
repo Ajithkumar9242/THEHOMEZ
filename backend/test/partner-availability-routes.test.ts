@@ -67,22 +67,6 @@ describe('Milestone 4 Step 6: Subtask 6.4B — Partner Availability Express Rout
     if (isDbConnected) {
       await seedApprovedUnits();
 
-      // Clean test collections
-      await PartnerProductModel.deleteMany({});
-      await PartnerAvailabilityHistoryModel.collection.deleteMany({});
-      await PartnerModel.deleteMany({
-        $or: [
-          { businessName: { $regex: /^TEST-RT-PARTNER-/ } },
-          { phone: { $regex: /^\+919666/ } },
-        ],
-      });
-      await ProductModel.deleteMany({ slug: { $regex: /^test-rt-/ } });
-      await ProductVariantModel.deleteMany({});
-      await ServiceAreaModel.deleteMany({ code: { $regex: /^TEST-RT-SA-/ } });
-      await CategoryModel.deleteMany({ slug: { $regex: /^test-rt-/ } });
-      await UserModel.deleteMany({ phone: { $regex: /^\+919777/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^TEST_RT_/ } });
-
       // 1. Service Areas
       activeServiceArea1 = await ServiceAreaModel.create({
         code: 'TEST-RT-SA-1',
@@ -281,28 +265,48 @@ describe('Milestone 4 Step 6: Subtask 6.4B — Partner Availability Express Rout
 
   afterAll(async () => {
     if (isDbConnected) {
-      await PartnerProductModel.deleteMany({});
-      await PartnerAvailabilityHistoryModel.collection.deleteMany({});
-      await PartnerModel.deleteMany({
-        $or: [
-          { businessName: { $regex: /^TEST-RT-PARTNER-/ } },
-          { phone: { $regex: /^\+919666/ } },
-        ],
-      });
-      await ProductModel.deleteMany({ slug: { $regex: /^test-rt-/ } });
-      await ProductVariantModel.deleteMany({});
-      await ServiceAreaModel.deleteMany({ code: { $regex: /^TEST-RT-SA-/ } });
-      await CategoryModel.deleteMany({ slug: { $regex: /^test-rt-/ } });
-      await UserModel.deleteMany({ phone: { $regex: /^\+919777/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^TEST_RT_/ } });
+      const partnerIds = [partnerA?._id, partnerB?._id, suspendedPartner?._id].filter(Boolean);
+      const productIds = [standaloneProduct?._id, multiVariantProduct?._id].filter(Boolean);
+      const areaIds = [activeServiceArea1?._id, activeServiceArea2?._id, inactiveServiceArea?._id].filter(Boolean);
+      const userIds = [
+        partnerAUser?._id,
+        partnerAReadOnlyUser?._id,
+        partnerBUser?._id,
+        suspendedPartnerUser?._id,
+        staffAdminUser?._id,
+        customerUser?._id,
+      ].filter(Boolean);
+
+      if (partnerIds.length > 0) {
+        await PartnerProductModel.deleteMany({ partnerId: { $in: partnerIds } });
+        await PartnerAvailabilityHistoryModel.deleteMany({ partnerId: { $in: partnerIds } });
+        await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
+      }
+      if (productIds.length > 0) {
+        await ProductVariantModel.deleteMany({ productId: { $in: productIds } });
+        await ProductModel.deleteMany({ _id: { $in: productIds } });
+      }
+      if (areaIds.length > 0) {
+        await ServiceAreaModel.deleteMany({ _id: { $in: areaIds } });
+      }
+      if (testCategory?._id) {
+        await CategoryModel.deleteMany({ _id: testCategory._id });
+      }
+      if (userIds.length > 0) {
+        await UserModel.deleteMany({ _id: { $in: userIds } });
+      }
+      await RoleModel.deleteMany({ code: { $in: ['TEST_RT_PARTNER_WRITE_ROLE', 'TEST_RT_PARTNER_READ_ROLE', 'TEST_RT_STAFF_ADMIN_ROLE'] } });
       await disconnectDatabase();
     }
   });
 
   beforeEach(async () => {
     if (!isDbConnected) return;
-    await PartnerProductModel.deleteMany({});
-    await PartnerAvailabilityHistoryModel.collection.deleteMany({});
+    const partnerIds = [partnerA?._id, partnerB?._id, suspendedPartner?._id].filter(Boolean);
+    if (partnerIds.length > 0) {
+      await PartnerProductModel.deleteMany({ partnerId: { $in: partnerIds } });
+      await PartnerAvailabilityHistoryModel.deleteMany({ partnerId: { $in: partnerIds } });
+    }
   });
 
   // ==========================================================================

@@ -55,15 +55,6 @@ describe('Milestone 4 Step 6: Subtask 6.3A — PartnerAvailabilityService Domain
   beforeAll(async () => {
     await connectDatabase();
 
-    // Clean test data
-    await PartnerProductModel.collection.deleteMany({});
-    await PartnerAvailabilityHistoryModel.collection.deleteMany({});
-    await ProductVariantModel.collection.deleteMany({ sku: { $regex: /^SVC-AVAIL-/ } });
-    await ProductModel.collection.deleteMany({ slug: { $regex: /^svc-avail-/ } });
-    await PartnerModel.collection.deleteMany({ phone: { $regex: /^\+9198777/ } });
-    await ServiceAreaModel.collection.deleteMany({ code: { $regex: /^SVC-SA-/ } });
-    await CategoryModel.collection.deleteMany({ code: { $regex: /^SVC_CAT_/ } });
-
     // Sync authoritative indexes
     await PartnerProductModel.syncIndexes();
     await PartnerAvailabilityHistoryModel.syncIndexes();
@@ -305,13 +296,32 @@ describe('Milestone 4 Step 6: Subtask 6.3A — PartnerAvailabilityService Domain
   });
 
   afterAll(async () => {
-    await PartnerProductModel.collection.deleteMany({});
-    await PartnerAvailabilityHistoryModel.collection.deleteMany({});
-    await ProductVariantModel.collection.deleteMany({ sku: { $regex: /^SVC-AVAIL-/ } });
-    await ProductModel.collection.deleteMany({ slug: { $regex: /^svc-avail-/ } });
-    await PartnerModel.collection.deleteMany({ phone: { $regex: /^\+9198777/ } });
-    await ServiceAreaModel.collection.deleteMany({ code: { $regex: /^SVC-SA-/ } });
-    await CategoryModel.collection.deleteMany({ code: { $regex: /^SVC_CAT_/ } });
+    const partnerIds = [partnerId1, partnerId2, suspendedPartnerId].filter(Boolean);
+    const productIds = [
+      standaloneProductId1,
+      standaloneProductId2,
+      draftProductId,
+      multiVariantParentId,
+      foreignParent?._id,
+    ].filter(Boolean);
+    const areaIds = [serviceAreaId1, serviceAreaId2, inactiveServiceAreaId].filter(Boolean);
+    const catIds = [categoryId, subcategoryId].filter(Boolean);
+
+    if (partnerIds.length > 0) {
+      await PartnerProductModel.deleteMany({ partnerId: { $in: partnerIds } });
+      await PartnerAvailabilityHistoryModel.deleteMany({ partnerId: { $in: partnerIds } });
+      await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
+    }
+    if (productIds.length > 0) {
+      await ProductVariantModel.deleteMany({ productId: { $in: productIds } });
+      await ProductModel.deleteMany({ _id: { $in: productIds } });
+    }
+    if (areaIds.length > 0) {
+      await ServiceAreaModel.deleteMany({ _id: { $in: areaIds } });
+    }
+    if (catIds.length > 0) {
+      await CategoryModel.deleteMany({ _id: { $in: catIds } });
+    }
     await disconnectDatabase();
   });
 

@@ -39,6 +39,12 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
   let inactiveRootCategory: InstanceType<typeof CategoryModel>;
   let inactiveSubcategory: InstanceType<typeof CategoryModel>;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdProductIds: mongoose.Types.ObjectId[] = [];
+  const createdCategoryIds: mongoose.Types.ObjectId[] = [];
+  const createdRoleIds: mongoose.Types.ObjectId[] = [];
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -52,41 +58,59 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
 
     if (isDbConnected) {
       await seedApprovedUnits();
-      await ProductModel.deleteMany({ slug: { $regex: /^test-/ } });
-      await ProductVariantModel.deleteMany({});
-      await SkuRegistryModel.deleteMany({ sku: { $regex: /^THZ-/ } });
-      await ProductPricingModel.deleteMany({});
-      await mongoose.connection.collection('price_history').deleteMany({});
-      await CategoryModel.deleteMany({ slug: { $regex: /^test-/ } });
-      await UserModel.deleteMany({ phone: { $regex: /^\+919444/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^PROD_TEST_/ } });
+
+      // Intercept all products saved during test run to prove current-run ownership
+      ProductModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) {
+          createdProductIds.push(doc._id);
+        }
+      });
     }
   });
 
   afterAll(async () => {
     if (isDbConnected) {
-      await ProductModel.deleteMany({ slug: { $regex: /^test-/ } });
-      await ProductVariantModel.deleteMany({});
-      await SkuRegistryModel.deleteMany({ sku: { $regex: /^THZ-/ } });
-      await ProductPricingModel.deleteMany({});
-      await mongoose.connection.collection('price_history').deleteMany({});
-      await CategoryModel.deleteMany({ slug: { $regex: /^test-/ } });
-      await UserModel.deleteMany({ phone: { $regex: /^\+919444/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^PROD_TEST_/ } });
+      await cleanTestFixtures();
       await disconnectDatabase();
     }
   });
 
+  async function cleanTestFixtures() {
+    if (!isDbConnected) return;
+
+    if (createdProductIds.length > 0) {
+      const prodIds = [...createdProductIds];
+      createdProductIds.length = 0;
+      await ProductPricingModel.deleteMany({ productId: { $in: prodIds } });
+      await mongoose.connection.collection('price_history').deleteMany({ productId: { $in: prodIds } });
+      await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
+      await SkuRegistryModel.deleteMany({ productId: { $in: prodIds } });
+      await ProductModel.deleteMany({ _id: { $in: prodIds } });
+    }
+
+    if (createdCategoryIds.length > 0) {
+      const catIds = [...createdCategoryIds];
+      createdCategoryIds.length = 0;
+      await CategoryModel.deleteMany({ _id: { $in: catIds } });
+    }
+
+    if (createdUserIds.length > 0) {
+      const uIds = [...createdUserIds];
+      createdUserIds.length = 0;
+      await UserModel.deleteMany({ _id: { $in: uIds } });
+    }
+
+    if (createdRoleIds.length > 0) {
+      const rIds = [...createdRoleIds];
+      createdRoleIds.length = 0;
+      await RoleModel.deleteMany({ _id: { $in: rIds } });
+    }
+  }
+
   beforeEach(async () => {
     if (!isDbConnected) return;
 
-    // Clean test products, variants, registry, and categories
-    await ProductModel.deleteMany({ slug: { $regex: /^test-/ } });
-    await ProductVariantModel.deleteMany({});
-    await SkuRegistryModel.deleteMany({});
-    await ProductPricingModel.deleteMany({});
-    await mongoose.connection.collection('price_history').deleteMany({});
-    await CategoryModel.deleteMany({ slug: { $regex: /^test-/ } });
+    await cleanTestFixtures();
 
     // Seed Active Categories
     testRootCategory = await CategoryModel.create({
@@ -97,6 +121,7 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       isActive: true,
       version: 0,
     });
+    createdCategoryIds.push(testRootCategory._id);
 
     testSubcategory = await CategoryModel.create({
       slug: 'test-cement-sub',
@@ -107,6 +132,7 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       isActive: true,
       version: 0,
     });
+    createdCategoryIds.push(testSubcategory._id);
 
     // Seed Inactive Categories
     inactiveRootCategory = await CategoryModel.create({
@@ -117,6 +143,7 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       isActive: false,
       version: 0,
     });
+    createdCategoryIds.push(inactiveRootCategory._id);
 
     inactiveSubcategory = await CategoryModel.create({
       slug: 'test-inactive-sub',
@@ -127,9 +154,10 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       isActive: false,
       version: 0,
     });
+    createdCategoryIds.push(inactiveSubcategory._id);
 
     // 1. Catalog Writer Role (CATALOG_READ, CATALOG_WRITE)
-    await RoleModel.findOneAndUpdate(
+    const role1 = await RoleModel.findOneAndUpdate(
       { code: 'PROD_TEST_WRITER' },
       {
         code: 'PROD_TEST_WRITER',
@@ -140,6 +168,8 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     );
+    if (role1) createdRoleIds.push(role1._id);
+
     catalogWriterUser = (await UserModel.findOneAndUpdate(
       { phone: '+919444000001' },
       {
@@ -150,10 +180,11 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
+    if (catalogWriterUser) createdUserIds.push(catalogWriterUser._id);
     catalogWriterToken = tokenService.signAccessToken(catalogWriterUser);
 
     // 2. Catalog Publisher Role (CATALOG_READ, CATALOG_WRITE, CATALOG_PUBLISH)
-    await RoleModel.findOneAndUpdate(
+    const role2 = await RoleModel.findOneAndUpdate(
       { code: 'PROD_TEST_PUBLISHER' },
       {
         code: 'PROD_TEST_PUBLISHER',
@@ -168,6 +199,8 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     );
+    if (role2) createdRoleIds.push(role2._id);
+
     catalogPublisherUser = (await UserModel.findOneAndUpdate(
       { phone: '+919444000002' },
       {
@@ -178,10 +211,11 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
+    if (catalogPublisherUser) createdUserIds.push(catalogPublisherUser._id);
     catalogPublisherToken = tokenService.signAccessToken(catalogPublisherUser);
 
     // 3. Catalog Read-Only Role (CATALOG_READ)
-    await RoleModel.findOneAndUpdate(
+    const role3 = await RoleModel.findOneAndUpdate(
       { code: 'PROD_TEST_RO' },
       {
         code: 'PROD_TEST_RO',
@@ -192,6 +226,8 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     );
+    if (role3) createdRoleIds.push(role3._id);
+
     catalogReadOnlyUser = (await UserModel.findOneAndUpdate(
       { phone: '+919444000003' },
       {
@@ -202,10 +238,11 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
+    if (catalogReadOnlyUser) createdUserIds.push(catalogReadOnlyUser._id);
     _catalogReadOnlyToken = tokenService.signAccessToken(catalogReadOnlyUser);
 
     // 4. Unauthorized User
-    await RoleModel.findOneAndUpdate(
+    const role4 = await RoleModel.findOneAndUpdate(
       { code: 'PROD_TEST_NONE' },
       {
         code: 'PROD_TEST_NONE',
@@ -216,6 +253,8 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     );
+    if (role4) createdRoleIds.push(role4._id);
+
     unauthorizedUser = (await UserModel.findOneAndUpdate(
       { phone: '+919444000004' },
       {
@@ -226,6 +265,7 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
+    if (unauthorizedUser) createdUserIds.push(unauthorizedUser._id);
     _unauthorizedToken = tokenService.signAccessToken(unauthorizedUser);
   });
 

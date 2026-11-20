@@ -60,6 +60,14 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
   let existingStaffPlainUser: IUserDocument;
   let suspendedCustomerUser: IUserDocument;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdRoleIds: mongoose.Types.ObjectId[] = [];
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
+  const createdTokenIds: mongoose.Types.ObjectId[] = [];
+  const createdOtpIds: mongoose.Types.ObjectId[] = [];
+  const createdLockoutIds: mongoose.Types.ObjectId[] = [];
+  const createdOrderPartnerIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -71,15 +79,24 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
     tokenService = new TokenService();
 
     if (isDbConnected) {
-      // 1. Clean test-prefixed collections
-      await UserModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
-      await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
-      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
-      await RoleModel.deleteMany({ code: { $in: ['SEC_TEST_ADMIN', 'SEC_TEST_STAFF_PLAIN'] } });
-      await TestPartnerOrderModel.deleteMany({});
+      UserModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdUserIds.push(doc._id);
+      });
+      RoleModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdRoleIds.push(doc._id);
+      });
+      RefreshTokenModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdTokenIds.push(doc._id);
+      });
+      PhoneOtpModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdOtpIds.push(doc._id);
+      });
+      OtpLockoutModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdLockoutIds.push(doc._id);
+      });
 
       // 2. Seed test roles
-      await RoleModel.create([
+      const seededRoles = await RoleModel.create([
         {
           code: 'SEC_TEST_ADMIN',
           name: 'Security Test Admin',
@@ -99,9 +116,11 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
           permissions: [PermissionCode.CATALOG_READ],
         },
       ]);
+      createdRoleIds.push(...seededRoles.map((r) => r._id));
 
       partnerIdA = new mongoose.Types.ObjectId();
       partnerIdB = new mongoose.Types.ObjectId();
+      createdOrderPartnerIds.push(partnerIdA, partnerIdB);
 
       // 3. Pre-provision test accounts
       existingPartnerUser = await UserModel.create({
@@ -185,21 +204,37 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
 
   afterAll(async () => {
     if (isDbConnected) {
-      await UserModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
-      await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
-      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
-      await RoleModel.deleteMany({ code: { $in: ['SEC_TEST_ADMIN', 'SEC_TEST_STAFF_PLAIN'] } });
-      await RefreshTokenModel.deleteMany({
-        userId: {
-          $in: [
-            existingPartnerUser?._id,
-            existingStaffAdminUser?._id,
-            existingStaffPlainUser?._id,
-            suspendedCustomerUser?._id,
-          ],
-        },
-      });
-      await TestPartnerOrderModel.deleteMany({});
+      if (createdTokenIds.length > 0) {
+        const tIds = [...createdTokenIds];
+        createdTokenIds.length = 0;
+        await RefreshTokenModel.deleteMany({ _id: { $in: tIds } });
+      }
+      if (createdUserIds.length > 0) {
+        const uIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await RefreshTokenModel.deleteMany({ userId: { $in: uIds } });
+        await UserModel.deleteMany({ _id: { $in: uIds } });
+      }
+      if (createdOtpIds.length > 0) {
+        const oIds = [...createdOtpIds];
+        createdOtpIds.length = 0;
+        await PhoneOtpModel.deleteMany({ _id: { $in: oIds } });
+      }
+      if (createdLockoutIds.length > 0) {
+        const lIds = [...createdLockoutIds];
+        createdLockoutIds.length = 0;
+        await OtpLockoutModel.deleteMany({ _id: { $in: lIds } });
+      }
+      if (createdRoleIds.length > 0) {
+        const rIds = [...createdRoleIds];
+        createdRoleIds.length = 0;
+        await RoleModel.deleteMany({ _id: { $in: rIds } });
+      }
+      if (createdOrderPartnerIds.length > 0) {
+        const pIds = [...createdOrderPartnerIds];
+        createdOrderPartnerIds.length = 0;
+        await TestPartnerOrderModel.deleteMany({ partnerId: { $in: pIds } });
+      }
       await disconnectDatabase();
     }
   });
@@ -777,7 +812,7 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
     it('dynamically reflects permission removal from database without re-issuing JWT', async () => {
       if (!isDbConnected) return;
 
-      await RoleModel.create({
+      const dynamicRole = await RoleModel.create({
         code: 'SEC_DYNAMIC_ROLE',
         name: 'Dynamic Role',
         userType: UserType.STAFF,
@@ -813,7 +848,7 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
       expect(access2.body.error.code).toBe('FORBIDDEN');
 
       // Cleanup
-      await RoleModel.deleteOne({ code: 'SEC_DYNAMIC_ROLE' });
+      await RoleModel.deleteOne({ _id: dynamicRole._id });
       await UserModel.deleteOne({ _id: dynamicStaff._id });
     });
 

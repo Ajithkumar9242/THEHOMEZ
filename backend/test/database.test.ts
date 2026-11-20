@@ -84,7 +84,7 @@ describe('Database Connection Management & Recovery', () => {
         new Error('Could not connect to any servers in your MongoDB Atlas cluster'),
       );
 
-      await expect(connectDatabase('mongodb://invalid-host:27017/thehomez')).rejects.toThrow(
+      await expect(connectDatabase('mongodb://127.0.0.1:27017/thehomez_test')).rejects.toThrow(
         'Could not connect to any servers in your MongoDB Atlas cluster',
       );
     });

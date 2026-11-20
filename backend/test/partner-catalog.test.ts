@@ -75,25 +75,45 @@ describe('Milestone 4 Step 6.5B: Partner Availability Acceptance Test Suite', ()
   let unrelatedVariant: InstanceType<typeof ProductVariantModel>;
 
   async function cleanDatabase() {
-    await PartnerProductModel.deleteMany({});
-    await PartnerAvailabilityHistoryModel.collection.deleteMany({});
-    await PartnerModel.deleteMany({
-      $or: [{ businessName: { $regex: /^TEST-CT-PARTNER-/ } }, { phone: { $regex: /^\+919333/ } }],
-    });
-    await ProductModel.deleteMany({ slug: { $regex: /^test-ct-/ } });
-    await ProductVariantModel.deleteMany({ sku: { $regex: /^TEST-CT-/ } });
-    await SkuRegistryModel.deleteMany({ sku: { $regex: /^TEST-CT-/ } });
-    await ProductPricingModel.deleteMany({});
-    await PriceHistoryModel.collection.deleteMany({});
-    await ServiceAreaModel.deleteMany({
-      $or: [
-        { code: { $regex: /^TEST-CT-SA-/ } },
-        { pincodes: { $in: ['560071', '560072', '560073', '560074'] } },
-      ],
-    });
-    await CategoryModel.deleteMany({ slug: { $regex: /^test-ct-/ } });
-    await UserModel.deleteMany({ phone: { $regex: /^\+919333/ } });
-    await RoleModel.deleteMany({ code: { $regex: /^TEST_CT_/ } });
+    const partnerIds = [partnerA?._id, partnerB?._id, suspendedPartner?._id].filter(Boolean);
+    const productIds = [standaloneProduct?._id, multiVariantProduct?._id, unrelatedProduct?._id].filter(Boolean);
+    const variantIds = [activeVariant1?._id, activeVariant2?._id, unrelatedVariant?._id].filter(Boolean);
+    const areaIds = [activeServiceArea1?._id, activeServiceArea2?._id, inactiveServiceArea?._id].filter(Boolean);
+    const userIds = [
+      partnerAUser?._id,
+      partnerAReadOnlyUser?._id,
+      partnerBUser?._id,
+      suspendedPartnerUser?._id,
+      staffAdminUser?._id,
+      customerUser?._id,
+    ].filter(Boolean);
+
+    if (partnerIds.length > 0) {
+      await PartnerProductModel.deleteMany({ partnerId: { $in: partnerIds } });
+      await PartnerAvailabilityHistoryModel.deleteMany({ partnerId: { $in: partnerIds } });
+      await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
+    }
+    if (productIds.length > 0) {
+      await ProductPricingModel.deleteMany({ productId: { $in: productIds } });
+      if (variantIds.length > 0) {
+        await PriceHistoryModel.deleteMany({ entityId: { $in: [...productIds, ...variantIds] } });
+      } else {
+        await PriceHistoryModel.deleteMany({ entityId: { $in: productIds } });
+      }
+      await ProductVariantModel.deleteMany({ productId: { $in: productIds } });
+      await SkuRegistryModel.deleteMany({ sku: { $regex: /^TEST-CT-/ } });
+      await ProductModel.deleteMany({ _id: { $in: productIds } });
+    }
+    if (areaIds.length > 0) {
+      await ServiceAreaModel.deleteMany({ _id: { $in: areaIds } });
+    }
+    if (testCategory?._id) {
+      await CategoryModel.deleteMany({ _id: testCategory._id });
+    }
+    if (userIds.length > 0) {
+      await UserModel.deleteMany({ _id: { $in: userIds } });
+    }
+    await RoleModel.deleteMany({ code: { $in: ['TEST_CT_PARTNER_WRITE_ROLE', 'TEST_CT_PARTNER_READ_ROLE', 'TEST_CT_STAFF_ADMIN_ROLE'] } });
   }
 
   beforeAll(async () => {
@@ -109,7 +129,6 @@ describe('Milestone 4 Step 6.5B: Partner Availability Acceptance Test Suite', ()
 
     if (isDbConnected) {
       await seedApprovedUnits();
-      await cleanDatabase();
 
       // 1. Service Areas
       activeServiceArea1 = await ServiceAreaModel.create({
@@ -429,8 +448,11 @@ describe('Milestone 4 Step 6.5B: Partner Availability Acceptance Test Suite', ()
 
   beforeEach(async () => {
     if (!isDbConnected) return;
-    await PartnerProductModel.deleteMany({});
-    await PartnerAvailabilityHistoryModel.collection.deleteMany({});
+    const partnerIds = [partnerA?._id, partnerB?._id, suspendedPartner?._id].filter(Boolean);
+    if (partnerIds.length > 0) {
+      await PartnerProductModel.deleteMany({ partnerId: { $in: partnerIds } });
+      await PartnerAvailabilityHistoryModel.deleteMany({ partnerId: { $in: partnerIds } });
+    }
   });
 
   // ============================================================================
