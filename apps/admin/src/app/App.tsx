@@ -68,10 +68,10 @@ function StatusPage() {
         </Typography.Paragraph>
       </Card>
       <Alert
-        type="warning"
+        type="success"
         showIcon
-        message="Temporary development authentication only"
-        description="Email/password sign-in is scoped to the isolated development verification database. MFA is not implemented, and production Admin authentication is not approved."
+        message="Admin Authentication & MFA Foundation active"
+        description="Mandatory RFC 6238 TOTP Multi-Factor Authentication and single-use backup code recovery are configured and active for staff administrator accounts."
       />
     </Space>
   );

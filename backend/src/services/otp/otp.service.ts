@@ -171,11 +171,19 @@ export class OtpService {
     const config = getConfig();
     const phone = normalizePhoneNumber(rawPhone);
 
+    if (userType === UserType.STAFF) {
+      throw new OtpError(
+        'Staff accounts cannot authenticate via phone OTP. Use Admin email/password login.',
+        'STAFF_OTP_DISABLED',
+        403,
+      );
+    }
+
     // 1. Identity Pre-conditions Check (Anti-Enumeration Protection)
-    // Customer self-registration allows non-existent accounts; Partner and Staff require pre-provisioning.
+    // Customer self-registration allows non-existent accounts; Partner requires pre-provisioning.
     // Suspended accounts or unprovisioned privileged accounts must NOT receive OTP challenges,
     // but the API must return a uniform response envelope to prevent account enumeration.
-    if (userType === UserType.PARTNER || userType === UserType.STAFF) {
+    if (userType === UserType.PARTNER) {
       const existingUser = await UserModel.findOne({ phone, userType });
       if (!existingUser || existingUser.status !== UserStatus.ACTIVE) {
         return {
@@ -280,6 +288,14 @@ export class OtpService {
   ): Promise<{ user: IUserDocument }> {
     const config = getConfig();
     const phone = normalizePhoneNumber(rawPhone);
+
+    if (userType === UserType.STAFF) {
+      throw new OtpError(
+        'Staff accounts cannot authenticate via phone OTP. Use Admin email/password login.',
+        'STAFF_OTP_DISABLED',
+        403,
+      );
+    }
 
     if (!rawOtp || !/^\d{6}$/.test(rawOtp.trim())) {
       throw new OtpError('Invalid OTP code format. Must be a 6-digit code', 'INVALID_OTP', 400);

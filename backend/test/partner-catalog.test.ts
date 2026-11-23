@@ -73,6 +73,11 @@ describe('Milestone 4 Step 6.5B: Partner Availability Acceptance Test Suite', ()
 
   let unrelatedProduct: InstanceType<typeof ProductModel>;
   let unrelatedVariant: InstanceType<typeof ProductVariantModel>;
+  let createdRoleIds: Types.ObjectId[] = [];
+  const createdPartnerProductIds: Types.ObjectId[] = [];
+  const createdPricingIds: Types.ObjectId[] = [];
+  const createdSkuRegistryIds: Types.ObjectId[] = [];
+  const createdVariantIds: Types.ObjectId[] = [];
 
   async function cleanDatabase() {
     const partnerIds = [partnerA?._id, partnerB?._id, suspendedPartner?._id].filter(Boolean);
@@ -88,20 +93,30 @@ describe('Milestone 4 Step 6.5B: Partner Availability Acceptance Test Suite', ()
       customerUser?._id,
     ].filter(Boolean);
 
+    if (createdPartnerProductIds.length > 0) {
+      const ppIds = [...createdPartnerProductIds];
+      createdPartnerProductIds.length = 0;
+      await PartnerProductModel.deleteMany({ _id: { $in: ppIds } });
+    }
     if (partnerIds.length > 0) {
-      await PartnerProductModel.deleteMany({ partnerId: { $in: partnerIds } });
-      await PartnerAvailabilityHistoryModel.deleteMany({ partnerId: { $in: partnerIds } });
       await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
     }
+    if (createdPricingIds.length > 0) {
+      const pIds = [...createdPricingIds];
+      createdPricingIds.length = 0;
+      await ProductPricingModel.deleteMany({ _id: { $in: pIds } });
+    }
+    if (createdSkuRegistryIds.length > 0) {
+      const skuIds = [...createdSkuRegistryIds];
+      createdSkuRegistryIds.length = 0;
+      await SkuRegistryModel.deleteMany({ _id: { $in: skuIds } });
+    }
+    if (variantIds.length > 0 || createdVariantIds.length > 0) {
+      const allVariantIds = Array.from(new Set([...variantIds, ...createdVariantIds]));
+      createdVariantIds.length = 0;
+      await ProductVariantModel.deleteMany({ _id: { $in: allVariantIds } });
+    }
     if (productIds.length > 0) {
-      await ProductPricingModel.deleteMany({ productId: { $in: productIds } });
-      if (variantIds.length > 0) {
-        await PriceHistoryModel.deleteMany({ entityId: { $in: [...productIds, ...variantIds] } });
-      } else {
-        await PriceHistoryModel.deleteMany({ entityId: { $in: productIds } });
-      }
-      await ProductVariantModel.deleteMany({ productId: { $in: productIds } });
-      await SkuRegistryModel.deleteMany({ sku: { $regex: /^TEST-CT-/ } });
       await ProductModel.deleteMany({ _id: { $in: productIds } });
     }
     if (areaIds.length > 0) {
@@ -113,7 +128,9 @@ describe('Milestone 4 Step 6.5B: Partner Availability Acceptance Test Suite', ()
     if (userIds.length > 0) {
       await UserModel.deleteMany({ _id: { $in: userIds } });
     }
-    await RoleModel.deleteMany({ code: { $in: ['TEST_CT_PARTNER_WRITE_ROLE', 'TEST_CT_PARTNER_READ_ROLE', 'TEST_CT_STAFF_ADMIN_ROLE'] } });
+    if (createdRoleIds.length > 0) {
+      await RoleModel.deleteMany({ _id: { $in: createdRoleIds } });
+    }
   }
 
   beforeAll(async () => {
@@ -128,6 +145,19 @@ describe('Milestone 4 Step 6.5B: Partner Availability Acceptance Test Suite', ()
     app = createApp();
 
     if (isDbConnected) {
+      PartnerProductModel.schema.post('save', function (doc: any) {
+        if (doc?._id) createdPartnerProductIds.push(doc._id);
+      });
+      ProductPricingModel.schema.post('save', function (doc: any) {
+        if (doc?._id) createdPricingIds.push(doc._id);
+      });
+      SkuRegistryModel.schema.post('save', function (doc: any) {
+        if (doc?._id) createdSkuRegistryIds.push(doc._id);
+      });
+      ProductVariantModel.schema.post('save', function (doc: any) {
+        if (doc?._id) createdVariantIds.push(doc._id);
+      });
+
       await seedApprovedUnits();
 
       // 1. Service Areas
@@ -344,7 +374,7 @@ describe('Milestone 4 Step 6.5B: Partner Availability Acceptance Test Suite', ()
       });
 
       // 5. Roles
-      await RoleModel.create([
+      const createdRoles = await RoleModel.create([
         {
           code: 'TEST_CT_PARTNER_WRITE_ROLE',
           name: 'Partner Availability Writer Role',
@@ -377,6 +407,7 @@ describe('Milestone 4 Step 6.5B: Partner Availability Acceptance Test Suite', ()
           ],
         },
       ]);
+      createdRoleIds = createdRoles.map((r) => r._id as Types.ObjectId);
 
       // 6. Users & Signed JWTs
       partnerAUser = await UserModel.create({
@@ -448,10 +479,10 @@ describe('Milestone 4 Step 6.5B: Partner Availability Acceptance Test Suite', ()
 
   beforeEach(async () => {
     if (!isDbConnected) return;
-    const partnerIds = [partnerA?._id, partnerB?._id, suspendedPartner?._id].filter(Boolean);
-    if (partnerIds.length > 0) {
-      await PartnerProductModel.deleteMany({ partnerId: { $in: partnerIds } });
-      await PartnerAvailabilityHistoryModel.deleteMany({ partnerId: { $in: partnerIds } });
+    if (createdPartnerProductIds.length > 0) {
+      const ppIds = [...createdPartnerProductIds];
+      createdPartnerProductIds.length = 0;
+      await PartnerProductModel.deleteMany({ _id: { $in: ppIds } });
     }
   });
 

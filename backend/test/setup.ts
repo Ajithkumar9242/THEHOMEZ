@@ -1,5 +1,11 @@
 import mongoose from 'mongoose';
-import { registerTestDeletionSafetyHooks } from '../src/database/test-guard.js';
+import {
+  registerTestDeletionSafetyHooks,
+  TestFixtureRegistry,
+  registerTestFixture,
+} from '../src/database/test-guard.js';
+
+export { TestFixtureRegistry, registerTestFixture };
 
 /**
  * Vitest Global Setup File

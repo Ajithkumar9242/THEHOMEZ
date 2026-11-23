@@ -73,6 +73,12 @@ describe('Milestone 5B.1: Customer Delivery Site Address Book (Backend)', () => 
     };
   }
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdAddressIds: mongoose.Types.ObjectId[] = [];
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
+  const createdRoleIds: mongoose.Types.ObjectId[] = [];
+  const createdServiceAreaIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -89,19 +95,20 @@ describe('Milestone 5B.1: Customer Delivery Site Address Book (Backend)', () => 
       return;
     }
 
-    await CustomerAddressModel.syncIndexes();
+    CustomerAddressModel.schema.post('save', function (doc: any) {
+      if (doc && doc._id) createdAddressIds.push(doc._id);
+    });
+    UserModel.schema.post('save', function (doc: any) {
+      if (doc && doc._id) createdUserIds.push(doc._id);
+    });
+    RoleModel.schema.post('save', function (doc: any) {
+      if (doc && doc._id) createdRoleIds.push(doc._id);
+    });
+    ServiceAreaModel.schema.post('save', function (doc: any) {
+      if (doc && doc._id) createdServiceAreaIds.push(doc._id);
+    });
 
-    // Clean only test fixtures belonging to this suite
-    const existingTestUsers = await UserModel.find({
-      phone: { $regex: /^\+9193333/ },
-    }).select('_id');
-    const existingTestUserIds = existingTestUsers.map((u) => u._id);
-    if (existingTestUserIds.length > 0) {
-      await CustomerAddressModel.deleteMany({ userId: { $in: existingTestUserIds } });
-    }
-    await UserModel.deleteMany({ phone: { $regex: /^\+9193333/ } });
-    await RoleModel.deleteMany({ code: { $regex: /^ADDR_TEST_/ } });
-    await ServiceAreaModel.deleteMany({ code: { $regex: /^ADDR-TEST-SA-/ } });
+    await CustomerAddressModel.syncIndexes();
 
     await RoleModel.create({
       code: `${testRolePrefix}ADMIN`,
@@ -185,9 +192,13 @@ describe('Milestone 5B.1: Customer Delivery Site Address Book (Backend)', () => 
     vi.restoreAllMocks();
     if (!isDbConnected) return;
 
-    await CustomerAddressModel.deleteMany({
-      userId: { $in: [customerA._id, customerB._id] },
-    });
+    if (createdAddressIds.length > 0) {
+      const aIds = [...createdAddressIds];
+      createdAddressIds.length = 0;
+      await CustomerAddressModel.deleteMany({
+        _id: { $in: aIds },
+      });
+    }
 
     // Ensure service area active flags are reset before each test
     await ServiceAreaModel.updateOne({ _id: activeServiceArea._id }, { $set: { isActive: true } });
@@ -199,21 +210,26 @@ describe('Milestone 5B.1: Customer Delivery Site Address Book (Backend)', () => 
 
   afterAll(async () => {
     if (isDbConnected) {
-      await CustomerAddressModel.deleteMany({
-        userId: {
-          $in: [
-            customerA._id,
-            customerB._id,
-            suspendedCustomer._id,
-            pendingCustomer._id,
-            partnerUser._id,
-            staffUser._id,
-          ],
-        },
-      });
-      await UserModel.deleteMany({ phone: { $regex: /^\+9193333/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^ADDR_TEST_/ } });
-      await ServiceAreaModel.deleteMany({ code: { $regex: /^ADDR-TEST-SA-/ } });
+      if (createdAddressIds.length > 0) {
+        const aIds = [...createdAddressIds];
+        createdAddressIds.length = 0;
+        await CustomerAddressModel.deleteMany({ _id: { $in: aIds } });
+      }
+      if (createdUserIds.length > 0) {
+        const uIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await UserModel.deleteMany({ _id: { $in: uIds } });
+      }
+      if (createdRoleIds.length > 0) {
+        const rIds = [...createdRoleIds];
+        createdRoleIds.length = 0;
+        await RoleModel.deleteMany({ _id: { $in: rIds } });
+      }
+      if (createdServiceAreaIds.length > 0) {
+        const saIds = [...createdServiceAreaIds];
+        createdServiceAreaIds.length = 0;
+        await ServiceAreaModel.deleteMany({ _id: { $in: saIds } });
+      }
       await disconnectDatabase();
     }
   });

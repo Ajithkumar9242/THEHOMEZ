@@ -97,3 +97,30 @@ export interface ILogoutResponse {
 export interface IUserProfileResponse {
   user: IAuthUser;
 }
+
+/**
+ * Challenge response returned by Admin email/password login when MFA is required.
+ */
+export interface IAdminLoginChallengeResponse {
+  mfaRequired: true;
+  mfaEnrolled: boolean;
+  mfaToken: string;
+  message: string;
+}
+
+/**
+ * Response payload returned during Admin MFA setup.
+ */
+export interface IAdminMfaSetupResponse {
+  secret: string;
+  otpauthUri: string;
+  backupCodes: string[];
+}
+
+/**
+ * Response payload returned when backup codes are regenerated.
+ */
+export interface IAdminBackupCodesResponse {
+  backupCodes: string[];
+  message: string;
+}

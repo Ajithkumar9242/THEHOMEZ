@@ -1732,7 +1732,6 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
       if (createdPartnerIds.length > 0) {
         const partnerIds = [...createdPartnerIds];
         createdPartnerIds.length = 0;
-        await PartnerAuditLogModel.deleteMany({ partnerId: { $in: partnerIds } });
         await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
       }
 

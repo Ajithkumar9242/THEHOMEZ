@@ -41,9 +41,18 @@ describe('Milestone 4 Step 5: Substep 5.4 — PricingService Transactional Domai
   let childVariant2: IProductVariantDocument;
   let foreignMultiVariantParent: IProductDocument;
   let foreignVariant: IProductVariantDocument;
+  const createdPricingIds: Types.ObjectId[] = [];
+  const createdVariantIds: Types.ObjectId[] = [];
 
   beforeAll(async () => {
     await connectDatabase();
+
+    ProductPricingModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdPricingIds.push(doc._id);
+    });
+    ProductVariantModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdVariantIds.push(doc._id);
+    });
 
     // 0. Seed RBAC roles
     const rbacService = new RbacService();
@@ -248,16 +257,20 @@ describe('Milestone 4 Step 5: Substep 5.4 — PricingService Transactional Domai
       foreignMultiVariantParent?._id,
     ].filter(Boolean);
 
+    if (createdPricingIds.length > 0) {
+      const pIds = [...createdPricingIds];
+      createdPricingIds.length = 0;
+      await ProductPricingModel.deleteMany({ _id: { $in: pIds } });
+    }
+
+    const variantIds = [childVariant1?._id, childVariant2?._id, foreignVariant?._id].filter(Boolean);
+    const allVariantIds = Array.from(new Set([...variantIds, ...createdVariantIds]));
+    if (allVariantIds.length > 0) {
+      createdVariantIds.length = 0;
+      await ProductVariantModel.deleteMany({ _id: { $in: allVariantIds } });
+    }
+
     if (productIds.length > 0) {
-      await ProductPricingModel.collection.deleteMany({
-        productId: { $in: productIds },
-      });
-      await PriceHistoryModel.collection.deleteMany({
-        productId: { $in: productIds },
-      });
-      await ProductVariantModel.collection.deleteMany({
-        productId: { $in: productIds },
-      });
       await ProductModel.collection.deleteMany({
         _id: { $in: productIds },
       });

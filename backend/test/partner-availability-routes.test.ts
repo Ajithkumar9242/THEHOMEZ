@@ -52,6 +52,9 @@ describe('Milestone 4 Step 6: Subtask 6.4B — Partner Availability Express Rout
   let standaloneProduct: InstanceType<typeof ProductModel>;
   let multiVariantProduct: InstanceType<typeof ProductModel>;
   let activeVariant1: InstanceType<typeof ProductVariantModel>;
+  let createdRoleIds: mongoose.Types.ObjectId[] = [];
+  const createdPartnerProductIds: mongoose.Types.ObjectId[] = [];
+  const createdVariantIds: mongoose.Types.ObjectId[] = [];
 
   beforeAll(async () => {
     try {
@@ -65,6 +68,13 @@ describe('Milestone 4 Step 6: Subtask 6.4B — Partner Availability Express Rout
     app = createApp();
 
     if (isDbConnected) {
+      PartnerProductModel.schema.post('save', function (doc: any) {
+        if (doc?._id) createdPartnerProductIds.push(doc._id);
+      });
+      ProductVariantModel.schema.post('save', function (doc: any) {
+        if (doc?._id) createdVariantIds.push(doc._id);
+      });
+
       await seedApprovedUnits();
 
       // 1. Service Areas
@@ -164,7 +174,7 @@ describe('Milestone 4 Step 6: Subtask 6.4B — Partner Availability Express Rout
       });
 
       // 4. Roles
-      await RoleModel.create([
+      const testRoles = await RoleModel.create([
         {
           code: 'TEST_RT_PARTNER_WRITE_ROLE',
           name: 'Partner Availability Writer',
@@ -202,6 +212,7 @@ describe('Milestone 4 Step 6: Subtask 6.4B — Partner Availability Express Rout
           permissions: [PermissionCode.CATALOG_READ],
         },
       ]);
+      createdRoleIds = testRoles.map((r) => r._id);
 
       // 5. Users
       partnerAUser = await UserModel.create({
@@ -277,13 +288,21 @@ describe('Milestone 4 Step 6: Subtask 6.4B — Partner Availability Express Rout
         customerUser?._id,
       ].filter(Boolean);
 
+      if (createdPartnerProductIds.length > 0) {
+        const ppIds = [...createdPartnerProductIds];
+        createdPartnerProductIds.length = 0;
+        await PartnerProductModel.deleteMany({ _id: { $in: ppIds } });
+      }
       if (partnerIds.length > 0) {
-        await PartnerProductModel.deleteMany({ partnerId: { $in: partnerIds } });
-        await PartnerAvailabilityHistoryModel.deleteMany({ partnerId: { $in: partnerIds } });
         await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
       }
+      const variantIds = [activeVariant1?._id].filter(Boolean);
+      const allVariantIds = Array.from(new Set([...variantIds, ...createdVariantIds]));
+      if (allVariantIds.length > 0) {
+        createdVariantIds.length = 0;
+        await ProductVariantModel.deleteMany({ _id: { $in: allVariantIds } });
+      }
       if (productIds.length > 0) {
-        await ProductVariantModel.deleteMany({ productId: { $in: productIds } });
         await ProductModel.deleteMany({ _id: { $in: productIds } });
       }
       if (areaIds.length > 0) {
@@ -295,17 +314,19 @@ describe('Milestone 4 Step 6: Subtask 6.4B — Partner Availability Express Rout
       if (userIds.length > 0) {
         await UserModel.deleteMany({ _id: { $in: userIds } });
       }
-      await RoleModel.deleteMany({ code: { $in: ['TEST_RT_PARTNER_WRITE_ROLE', 'TEST_RT_PARTNER_READ_ROLE', 'TEST_RT_STAFF_ADMIN_ROLE'] } });
+      if (createdRoleIds.length > 0) {
+        await RoleModel.deleteMany({ _id: { $in: createdRoleIds } });
+      }
       await disconnectDatabase();
     }
   });
 
   beforeEach(async () => {
     if (!isDbConnected) return;
-    const partnerIds = [partnerA?._id, partnerB?._id, suspendedPartner?._id].filter(Boolean);
-    if (partnerIds.length > 0) {
-      await PartnerProductModel.deleteMany({ partnerId: { $in: partnerIds } });
-      await PartnerAvailabilityHistoryModel.deleteMany({ partnerId: { $in: partnerIds } });
+    if (createdPartnerProductIds.length > 0) {
+      const ppIds = [...createdPartnerProductIds];
+      createdPartnerProductIds.length = 0;
+      await PartnerProductModel.deleteMany({ _id: { $in: ppIds } });
     }
   });
 

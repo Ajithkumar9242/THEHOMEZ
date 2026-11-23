@@ -113,7 +113,6 @@ describe('Auth Routes & Controllers — Step 6 Endpoints & Contracts', () => {
       if (createdUserIds.length > 0) {
         const uIds = [...createdUserIds];
         createdUserIds.length = 0;
-        await RefreshTokenModel.deleteMany({ userId: { $in: uIds } });
         await UserModel.deleteMany({ _id: { $in: uIds } });
       }
       if (createdOtpIds.length > 0) {

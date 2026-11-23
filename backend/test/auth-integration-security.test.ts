@@ -66,7 +66,7 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
   const createdTokenIds: mongoose.Types.ObjectId[] = [];
   const createdOtpIds: mongoose.Types.ObjectId[] = [];
   const createdLockoutIds: mongoose.Types.ObjectId[] = [];
-  const createdOrderPartnerIds: mongoose.Types.ObjectId[] = [];
+  const createdOrderIds: mongoose.Types.ObjectId[] = [];
 
   beforeAll(async () => {
     try {
@@ -94,6 +94,9 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
       OtpLockoutModel.schema.post('save', function (doc: any) {
         if (doc && doc._id) createdLockoutIds.push(doc._id);
       });
+      TestPartnerOrderModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdOrderIds.push(doc._id);
+      });
 
       // 2. Seed test roles
       const seededRoles = await RoleModel.create([
@@ -120,7 +123,6 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
 
       partnerIdA = new mongoose.Types.ObjectId();
       partnerIdB = new mongoose.Types.ObjectId();
-      createdOrderPartnerIds.push(partnerIdA, partnerIdB);
 
       // 3. Pre-provision test accounts
       existingPartnerUser = await UserModel.create({
@@ -154,10 +156,11 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
       });
 
       // 4. Seed partner orders for database-level query isolation test
-      await TestPartnerOrderModel.create([
+      const createdOrders = await TestPartnerOrderModel.create([
         { title: 'Partner A Cement Order', partnerId: partnerIdA },
         { title: 'Partner B Steel Order', partnerId: partnerIdB },
       ]);
+      createdOrderIds.push(...createdOrders.map((o) => o._id));
     }
 
     // Initialize standard application instance
@@ -212,7 +215,6 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
       if (createdUserIds.length > 0) {
         const uIds = [...createdUserIds];
         createdUserIds.length = 0;
-        await RefreshTokenModel.deleteMany({ userId: { $in: uIds } });
         await UserModel.deleteMany({ _id: { $in: uIds } });
       }
       if (createdOtpIds.length > 0) {
@@ -230,10 +232,10 @@ describe('Step 7: Route Integration & Comprehensive Security Regression Suite', 
         createdRoleIds.length = 0;
         await RoleModel.deleteMany({ _id: { $in: rIds } });
       }
-      if (createdOrderPartnerIds.length > 0) {
-        const pIds = [...createdOrderPartnerIds];
-        createdOrderPartnerIds.length = 0;
-        await TestPartnerOrderModel.deleteMany({ partnerId: { $in: pIds } });
+      if (createdOrderIds.length > 0) {
+        const oIds = [...createdOrderIds];
+        createdOrderIds.length = 0;
+        await TestPartnerOrderModel.deleteMany({ _id: { $in: oIds } });
       }
       await disconnectDatabase();
     }

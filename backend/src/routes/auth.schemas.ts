@@ -103,6 +103,66 @@ export const adminPasswordLoginSchema = z
   .strict();
 
 export type AdminPasswordLoginDto = z.infer<typeof adminPasswordLoginSchema>;
+export const adminLoginSchema = adminPasswordLoginSchema;
+export type AdminLoginDto = AdminPasswordLoginDto;
+
+/** Schema for Admin MFA setup challenge initiation. */
+export const adminMfaSetupSchema = z
+  .object({
+    mfaToken: z.string().trim().min(1, 'MFA challenge token is required').optional(),
+  })
+  .strict();
+
+export type AdminMfaSetupDto = z.infer<typeof adminMfaSetupSchema>;
+
+/** Schema for verifying initial Admin MFA setup before enabling TOTP. */
+export const adminMfaVerifySetupSchema = z
+  .object({
+    mfaToken: z.string().trim().min(1, 'MFA challenge token is required').optional(),
+    code: z
+      .string({ message: 'TOTP code is required' })
+      .trim()
+      .regex(/^\d{6}$/, 'TOTP code must be exactly 6 numeric digits'),
+  })
+  .strict();
+
+export type AdminMfaVerifySetupDto = z.infer<typeof adminMfaVerifySetupSchema>;
+
+/** Schema for verifying returning Admin TOTP code during login. */
+export const adminMfaVerifySchema = z
+  .object({
+    mfaToken: z.string().trim().min(1, 'MFA challenge token is required').optional(),
+    code: z
+      .string({ message: 'TOTP code is required' })
+      .trim()
+      .regex(/^\d{6}$/, 'TOTP code must be exactly 6 numeric digits'),
+  })
+  .strict();
+
+export type AdminMfaVerifyDto = z.infer<typeof adminMfaVerifySchema>;
+
+/** Schema for verifying a single-use Admin backup code during login. */
+export const adminMfaVerifyBackupSchema = z
+  .object({
+    mfaToken: z.string().trim().min(1, 'MFA challenge token is required').optional(),
+    backupCode: z
+      .string({ message: 'Backup code is required' })
+      .trim()
+      .min(1, 'Backup code cannot be empty')
+      .max(32, 'Backup code is invalid'),
+  })
+  .strict();
+
+export type AdminMfaVerifyBackupDto = z.infer<typeof adminMfaVerifyBackupSchema>;
+
+/** Schema for regenerating backup codes (requires staff password). */
+export const adminRegenerateBackupCodesSchema = z
+  .object({
+    password: z.string().min(1).max(128),
+  })
+  .strict();
+
+export type AdminRegenerateBackupCodesDto = z.infer<typeof adminRegenerateBackupCodesSchema>;
 
 /**
  * Schema for POST /api/v1/auth/refresh

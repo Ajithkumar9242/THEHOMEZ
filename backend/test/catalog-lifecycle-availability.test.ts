@@ -24,9 +24,34 @@ describe('Milestone 4, Step 6.5A: Partner Availability Archive Lifecycle Integra
   let testPartner1: InstanceType<typeof PartnerModel>;
   let testPartner2: InstanceType<typeof PartnerModel>;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdProductIds: Types.ObjectId[] = [];
+  const createdVariantIds: Types.ObjectId[] = [];
+  const createdPartnerProductIds: Types.ObjectId[] = [];
+  const createdPartnerAvailabilityHistoryIds: Types.ObjectId[] = [];
+  const createdSkuRegistryIds: Types.ObjectId[] = [];
+  const createdPartnerIds: Types.ObjectId[] = [];
+  const createdServiceAreaIds: Types.ObjectId[] = [];
+  const createdCategoryIds: Types.ObjectId[] = [];
+
   beforeAll(async () => {
     await connectDatabase();
-    await cleanTestData();
+
+    ProductModel.schema.post('save', function (doc: any) {
+      if (doc && doc._id) createdProductIds.push(doc._id);
+    });
+    ProductVariantModel.schema.post('save', function (doc: any) {
+      if (doc && doc._id) createdVariantIds.push(doc._id);
+    });
+    PartnerProductModel.schema.post('save', function (doc: any) {
+      if (doc && doc._id) createdPartnerProductIds.push(doc._id);
+    });
+    PartnerAvailabilityHistoryModel.schema.post('save', function (doc: any) {
+      if (doc && doc._id) createdPartnerAvailabilityHistoryIds.push(doc._id);
+    });
+    SkuRegistryModel.schema.post('save', function (doc: any) {
+      if (doc && doc._id) createdSkuRegistryIds.push(doc._id);
+    });
 
     const category = await CategoryModel.create({
       code: `AVAIL_CAT_${Date.now()}`,
@@ -36,6 +61,7 @@ describe('Milestone 4, Step 6.5A: Partner Availability Archive Lifecycle Integra
       displayOrder: 1,
     });
     testCategoryId = category._id;
+    createdCategoryIds.push(category._id);
 
     testServiceArea1 = await ServiceAreaModel.create({
       code: `SA-LIFECYCLE-1-${Date.now()}`,
@@ -46,6 +72,7 @@ describe('Milestone 4, Step 6.5A: Partner Availability Archive Lifecycle Integra
       pincodes: ['569801', '569802'],
       isActive: true,
     });
+    createdServiceAreaIds.push(testServiceArea1._id);
 
     testServiceArea2 = await ServiceAreaModel.create({
       code: `SA-LIFECYCLE-2-${Date.now()}`,
@@ -56,6 +83,7 @@ describe('Milestone 4, Step 6.5A: Partner Availability Archive Lifecycle Integra
       pincodes: ['569803', '569804'],
       isActive: true,
     });
+    createdServiceAreaIds.push(testServiceArea2._id);
 
     testPartner1 = await PartnerModel.create({
       businessName: 'Lifecycle Test Partner 1',
@@ -64,6 +92,7 @@ describe('Milestone 4, Step 6.5A: Partner Availability Archive Lifecycle Integra
       status: 'ACTIVE',
       deliveryMode: 'PARTNER_MANAGED',
     });
+    createdPartnerIds.push(testPartner1._id);
 
     testPartner2 = await PartnerModel.create({
       businessName: 'Lifecycle Test Partner 2',
@@ -72,45 +101,54 @@ describe('Milestone 4, Step 6.5A: Partner Availability Archive Lifecycle Integra
       status: 'ACTIVE',
       deliveryMode: 'PLATFORM_MANAGED',
     });
+    createdPartnerIds.push(testPartner2._id);
   });
 
   afterAll(async () => {
     await cleanTestData();
+    if (createdPartnerIds.length > 0) {
+      const ids = [...createdPartnerIds];
+      createdPartnerIds.length = 0;
+      await PartnerModel.deleteMany({ _id: { $in: ids } });
+    }
+    if (createdServiceAreaIds.length > 0) {
+      const ids = [...createdServiceAreaIds];
+      createdServiceAreaIds.length = 0;
+      await ServiceAreaModel.deleteMany({ _id: { $in: ids } });
+    }
+    if (createdCategoryIds.length > 0) {
+      const ids = [...createdCategoryIds];
+      createdCategoryIds.length = 0;
+      await CategoryModel.deleteMany({ _id: { $in: ids } });
+    }
     await disconnectDatabase();
   });
 
   beforeEach(async () => {
-    await PartnerProductModel.collection.deleteMany({
-      partnerId: { $in: [testPartner1._id, testPartner2._id] },
-    });
-    await PartnerAvailabilityHistoryModel.collection.deleteMany({
-      partnerId: { $in: [testPartner1._id, testPartner2._id] },
-    });
-    await ProductVariantModel.collection.deleteMany({ sku: { $regex: /^TEST-AVAIL-/ } });
-    await ProductModel.collection.deleteMany({ slug: { $regex: /^test-avail-/ } });
-    await SkuRegistryModel.collection.deleteMany({ sku: { $regex: /^TEST-AVAIL-/ } });
+    await cleanTestData();
   });
 
   async function cleanTestData() {
-    if (testPartner1 && testPartner2) {
-      await PartnerProductModel.collection.deleteMany({
-        partnerId: { $in: [testPartner1._id, testPartner2._id] },
-      });
-      await PartnerAvailabilityHistoryModel.collection.deleteMany({
-        partnerId: { $in: [testPartner1._id, testPartner2._id] },
-      });
+    if (createdPartnerProductIds.length > 0) {
+      const ids = [...createdPartnerProductIds];
+      createdPartnerProductIds.length = 0;
+      await PartnerProductModel.deleteMany({ _id: { $in: ids } });
     }
-    await ProductVariantModel.collection.deleteMany({ sku: { $regex: /^TEST-AVAIL-/ } });
-    await ProductModel.collection.deleteMany({ slug: { $regex: /^test-avail-/ } });
-    await SkuRegistryModel.collection.deleteMany({ sku: { $regex: /^TEST-AVAIL-/ } });
-    await PartnerModel.collection.deleteMany({ phone: { $regex: /^\+998811/ } });
-    await ServiceAreaModel.collection.deleteMany({
-      $or: [
-        { code: { $regex: /^SA-LIFECYCLE-/ } },
-        { pincodes: { $in: ['569801', '569802', '569803', '569804'] } },
-      ],
-    });
-    await CategoryModel.collection.deleteMany({ code: { $regex: /^AVAIL_CAT_/ } });
+    if (createdVariantIds.length > 0) {
+      const ids = [...createdVariantIds];
+      createdVariantIds.length = 0;
+      await ProductVariantModel.deleteMany({ _id: { $in: ids } });
+    }
+    if (createdSkuRegistryIds.length > 0) {
+      const ids = [...createdSkuRegistryIds];
+      createdSkuRegistryIds.length = 0;
+      await SkuRegistryModel.deleteMany({ _id: { $in: ids } });
+    }
+    if (createdProductIds.length > 0) {
+      const ids = [...createdProductIds];
+      createdProductIds.length = 0;
+      await ProductModel.deleteMany({ _id: { $in: ids } });
+    }
   }
 
   it('Product archival deactivates standalone product availability', async () => {

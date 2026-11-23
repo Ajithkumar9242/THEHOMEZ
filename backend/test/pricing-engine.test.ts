@@ -38,9 +38,14 @@ describe('Milestone 4 Step 5: Substep 5.3 — PricingEngineService Integration T
   let draftProduct: IProductDocument;
   let unpricedProduct: IProductDocument;
   let foreignProduct: IProductDocument;
+  const createdPricingIds: Types.ObjectId[] = [];
 
   beforeAll(async () => {
     await connectDatabase();
+
+    ProductPricingModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdPricingIds.push(doc._id);
+    });
 
     // 0. Seed default system roles
     const rbacService = new RbacService();
@@ -470,10 +475,13 @@ describe('Milestone 4 Step 5: Substep 5.3 — PricingEngineService Integration T
       foreignProduct?._id,
     ].filter(Boolean);
 
+    if (createdPricingIds.length > 0) {
+      const pIds = [...createdPricingIds];
+      createdPricingIds.length = 0;
+      await ProductPricingModel.deleteMany({ _id: { $in: pIds } });
+    }
+
     if (productIds.length > 0) {
-      await ProductPricingModel.collection.deleteMany({
-        productId: { $in: productIds },
-      });
       await ProductModel.collection.deleteMany({
         _id: { $in: productIds },
       });

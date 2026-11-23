@@ -20,6 +20,10 @@ describe('Middleware Pipeline — Authentication, Authorization, Tenant Guard & 
   let partnerId: string;
   let testApp: Application;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdRoleIds: mongoose.Types.ObjectId[] = [];
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -31,10 +35,16 @@ describe('Middleware Pipeline — Authentication, Authorization, Tenant Guard & 
     tokenService = new TokenService();
 
     if (isDbConnected) {
+      UserModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdUserIds.push(doc._id);
+      });
+      RoleModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdRoleIds.push(doc._id);
+      });
+
       partnerId = new mongoose.Types.ObjectId().toString();
 
       // Seed test roles with isolated prefix to prevent race conditions across parallel test files
-      await RoleModel.deleteMany({ code: { $in: ['MW_ROLE_CATALOG_ADMIN', 'MW_ROLE_READ_ONLY'] } });
       await RoleModel.create([
         {
           code: 'MW_ROLE_CATALOG_ADMIN',
@@ -51,9 +61,6 @@ describe('Middleware Pipeline — Authentication, Authorization, Tenant Guard & 
       ]);
 
       // Seed test users
-      await UserModel.deleteMany({
-        phone: { $in: ['+919666611111', '+919666622222', '+919666633333'] },
-      });
       testCustomer = await UserModel.create({
         phone: '+919666611111',
         userType: UserType.CUSTOMER,
@@ -158,8 +165,16 @@ describe('Middleware Pipeline — Authentication, Authorization, Tenant Guard & 
 
   afterAll(async () => {
     if (isDbConnected) {
-      await UserModel.deleteMany({ phone: { $regex: /^\+9196666/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^MW_ROLE_/ } });
+      if (createdUserIds.length > 0) {
+        const uIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await UserModel.deleteMany({ _id: { $in: uIds } });
+      }
+      if (createdRoleIds.length > 0) {
+        const rIds = [...createdRoleIds];
+        createdRoleIds.length = 0;
+        await RoleModel.deleteMany({ _id: { $in: rIds } });
+      }
       await disconnectDatabase();
     }
   });

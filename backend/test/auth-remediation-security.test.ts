@@ -95,7 +95,6 @@ describe('Milestone 5A.1 Backend Authentication Security Remediation Test Suite'
       if (createdUserIds.length > 0) {
         const uIds = [...createdUserIds];
         createdUserIds.length = 0;
-        await RefreshTokenModel.deleteMany({ userId: { $in: uIds } });
         await UserModel.deleteMany({ _id: { $in: uIds } });
       }
       if (createdOtpIds.length > 0) {
@@ -404,10 +403,6 @@ describe('Milestone 5A.1 Backend Authentication Security Remediation Test Suite'
 
       const phone = lockoutPhone;
 
-      // Clean existing state for lockoutPhone
-      await PhoneOtpModel.deleteMany({ phone });
-      await OtpLockoutModel.deleteMany({ phone });
-
       // Challenge 1: 3 failures
       await otpService.requestOtp(phone, UserType.CUSTOMER);
       for (let i = 0; i < 3; i++) {
@@ -558,9 +553,6 @@ describe('Milestone 5A.1 Backend Authentication Security Remediation Test Suite'
       const isolatedApp = createApp();
       const activePhone = `${testPhoneBase}91004`;
       const missingStaffPhone = `${testPhoneBase}91005`;
-
-      await PhoneOtpModel.deleteMany({ phone: { $in: [activePhone, missingStaffPhone] } });
-      await OtpLockoutModel.deleteMany({ phone: { $in: [activePhone, missingStaffPhone] } });
 
       await request(isolatedApp)
         .post('/api/v1/auth/otp/request')
@@ -1090,8 +1082,6 @@ describe('Milestone 5A.1 Backend Authentication Security Remediation Test Suite'
       if (!isDbConnected) return;
 
       const phone = `${testPhoneBase}94001`;
-      await PhoneOtpModel.deleteMany({ phone });
-      await OtpLockoutModel.deleteMany({ phone });
 
       // Trigger 5 failures across 2 challenges
       await otpService.requestOtp(phone, UserType.CUSTOMER);
@@ -1125,8 +1115,6 @@ describe('Milestone 5A.1 Backend Authentication Security Remediation Test Suite'
       if (!isDbConnected) return;
 
       const phone = `${testPhoneBase}94002`;
-      await PhoneOtpModel.deleteMany({ phone });
-      await OtpLockoutModel.deleteMany({ phone });
 
       // 3 failures on Challenge 1
       await otpService.requestOtp(phone, UserType.CUSTOMER);
@@ -1160,8 +1148,6 @@ describe('Milestone 5A.1 Backend Authentication Security Remediation Test Suite'
       if (!isDbConnected) return;
 
       const phone = `${testPhoneBase}94003`;
-      await PhoneOtpModel.deleteMany({ phone });
-      await OtpLockoutModel.deleteMany({ phone });
 
       // Concurrent first-time failures (no pre-existing OtpLockoutModel document)
       await otpService.requestOtp(phone, UserType.CUSTOMER);
@@ -1184,8 +1170,6 @@ describe('Milestone 5A.1 Backend Authentication Security Remediation Test Suite'
 
       // Verify concurrent valid + wrong attempt cannot recreate lockout doc after valid login succeeds
       const racePhone = `${testPhoneBase}94004`;
-      await PhoneOtpModel.deleteMany({ phone: racePhone });
-      await OtpLockoutModel.deleteMany({ phone: racePhone });
       await otpService.requestOtp(racePhone, UserType.CUSTOMER);
       const validOtp = MockOtpProvider.getLatestCapturedOtp(racePhone);
 
@@ -1205,8 +1189,6 @@ describe('Milestone 5A.1 Backend Authentication Security Remediation Test Suite'
       const canonicalPhone = '+919777794005';
       const local10 = '9777794005';
       const leadingZero = '09777794005';
-      await PhoneOtpModel.deleteMany({ phone: canonicalPhone });
-      await OtpLockoutModel.deleteMany({ phone: canonicalPhone });
 
       // 3 failures using +91 E.164
       await otpService.requestOtp(canonicalPhone, UserType.CUSTOMER);

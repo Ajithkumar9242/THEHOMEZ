@@ -25,6 +25,8 @@ describe('Milestone 4 Step 5: Substep 5.2 — Database Models & Partial Unique I
 
   // Tracked In-Memory Document IDs for Current-Run Positive Ownership
   const createdProductIds: mongoose.Types.ObjectId[] = [];
+  const createdPricingIds: mongoose.Types.ObjectId[] = [];
+  const createdVariantIds: mongoose.Types.ObjectId[] = [];
 
   beforeAll(async () => {
     try {
@@ -32,6 +34,13 @@ describe('Milestone 4 Step 5: Substep 5.2 — Database Models & Partial Unique I
       isDbConnected = true;
 
       if (isDbConnected) {
+        ProductPricingModel.schema.post('save', function (doc: any) {
+          if (doc?._id) createdPricingIds.push(doc._id);
+        });
+        ProductVariantModel.schema.post('save', function (doc: any) {
+          if (doc?._id) createdVariantIds.push(doc._id);
+        });
+
         await ProductPricingModel.syncIndexes();
         await PriceHistoryModel.syncIndexes();
 
@@ -105,12 +114,21 @@ describe('Milestone 4 Step 5: Substep 5.2 — Database Models & Partial Unique I
   async function cleanTestFixtures() {
     if (!isDbConnected) return;
 
+    if (createdPricingIds.length > 0) {
+      const pIds = [...createdPricingIds];
+      createdPricingIds.length = 0;
+      await ProductPricingModel.deleteMany({ _id: { $in: pIds } });
+    }
+
+    if (createdVariantIds.length > 0) {
+      const vIds = [...createdVariantIds];
+      createdVariantIds.length = 0;
+      await ProductVariantModel.deleteMany({ _id: { $in: vIds } });
+    }
+
     if (createdProductIds.length > 0) {
       const prodIds = [...createdProductIds];
       createdProductIds.length = 0;
-      await ProductPricingModel.deleteMany({ productId: { $in: prodIds } });
-      await PriceHistoryModel.deleteMany({ productId: { $in: prodIds } });
-      await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
       await ProductModel.deleteMany({ _id: { $in: prodIds } });
     }
   }

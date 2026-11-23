@@ -101,6 +101,8 @@ describe('Milestone 5B.2: Customer Cart (Backend)', () => {
   const createdPartnerProductIds: Types.ObjectId[] = [];
   const createdServiceAreaIds: Types.ObjectId[] = [];
   const createdUserIds: Types.ObjectId[] = [];
+  const createdRoleIds: Types.ObjectId[] = [];
+  const createdCartIds: Types.ObjectId[] = [];
 
   const testPhonePrefix = '+9194444';
   const partnerPhonePrefix = '+9194445';
@@ -129,15 +131,11 @@ describe('Milestone 5B.2: Customer Cart (Backend)', () => {
   async function cleanupTestFixtures(): Promise<void> {
     if (!isDbConnected) return;
 
-    await CartModel.deleteMany({
-      $or: [
-        { userId: { $in: createdUserIds } },
-        {
-          ownerType: 'GUEST',
-          sessionTokenHash: { $in: [hashToken(guestToken1), hashToken(guestToken2)] },
-        },
-      ],
-    });
+    if (createdCartIds.length > 0) {
+      const ids = [...createdCartIds];
+      createdCartIds.length = 0;
+      await CartModel.deleteMany({ _id: { $in: ids } });
+    }
 
     if (createdPartnerProductIds.length > 0) {
       await PartnerProductModel.deleteMany({ _id: { $in: createdPartnerProductIds } });
@@ -163,15 +161,9 @@ describe('Milestone 5B.2: Customer Cart (Backend)', () => {
     if (createdUserIds.length > 0) {
       await UserModel.deleteMany({ _id: { $in: createdUserIds } });
     }
-
-    // Defensive cleanup for any leftover cart-test prefixed fixtures
-    await ProductModel.deleteMany({ slug: { $regex: /^cart-test-/ } });
-    await ProductVariantModel.deleteMany({ sku: { $regex: /^CARTTEST-/ } });
-    await CategoryModel.deleteMany({ slug: { $regex: /^cart-test-/ } });
-    await ServiceAreaModel.deleteMany({ code: { $regex: /^CART-TEST-SA-/ } });
-    await PartnerModel.deleteMany({ phone: { $regex: /^\+9194445/ } });
-    await UserModel.deleteMany({ phone: { $regex: /^\+9194444/ } });
-    await RoleModel.deleteMany({ code: { $regex: /^CART_TEST_/ } });
+    if (createdRoleIds.length > 0) {
+      await RoleModel.deleteMany({ _id: { $in: createdRoleIds } });
+    }
   }
 
   beforeAll(async () => {
@@ -188,10 +180,17 @@ describe('Milestone 5B.2: Customer Cart (Backend)', () => {
 
     if (!isDbConnected) return;
 
+    CartModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdCartIds.push(doc._id);
+    });
+    CartModel.schema.post('findOneAndUpdate', function (doc: any) {
+      if (doc?._id) createdCartIds.push(doc._id);
+    });
+
     await cleanupTestFixtures();
     await seedApprovedUnits();
 
-    await RoleModel.create([
+    const seededRoles = await RoleModel.create([
       {
         code: 'CART_TEST_ADMIN',
         name: 'Cart Test Admin Role',
@@ -199,6 +198,7 @@ describe('Milestone 5B.2: Customer Cart (Backend)', () => {
         permissions: [],
       },
     ]);
+    createdRoleIds.push(...seededRoles.map((r) => r._id));
 
     customerA = await UserModel.create({
       phone: `${testPhonePrefix}00001`,
@@ -551,15 +551,11 @@ describe('Milestone 5B.2: Customer Cart (Backend)', () => {
   beforeEach(async () => {
     if (!isDbConnected) return;
 
-    await CartModel.deleteMany({
-      $or: [
-        { userId: { $in: createdUserIds } },
-        {
-          ownerType: 'GUEST',
-          sessionTokenHash: { $in: [hashToken(guestToken1), hashToken(guestToken2)] },
-        },
-      ],
-    });
+    if (createdCartIds.length > 0) {
+      const ids = [...createdCartIds];
+      createdCartIds.length = 0;
+      await CartModel.deleteMany({ _id: { $in: ids } });
+    }
 
     // Reset customerA/B roles cleanly and ensure discreteProduct/variant/pricing baseline state
     await UserModel.findByIdAndUpdate(customerA._id, {

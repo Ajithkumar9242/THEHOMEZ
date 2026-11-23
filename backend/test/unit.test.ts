@@ -52,6 +52,8 @@ describe('Milestone 4 Step 4: Construction Units, Quantity Rules & Validation Go
   const createdRoleIds: Types.ObjectId[] = [];
   const createdUserIds: Types.ObjectId[] = [];
   const createdUnitIds: Types.ObjectId[] = [];
+  const createdVariantIds: Types.ObjectId[] = [];
+  const createdSkuRegistryIds: Types.ObjectId[] = [];
 
   beforeAll(async () => {
     try {
@@ -70,6 +72,12 @@ describe('Milestone 4 Step 4: Construction Units, Quantity Rules & Validation Go
 
       ProductModel.schema.post('save', function (doc: any) {
         if (doc && doc._id) createdProductIds.push(doc._id);
+      });
+      ProductVariantModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdVariantIds.push(doc._id);
+      });
+      SkuRegistryModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdSkuRegistryIds.push(doc._id);
       });
       UnitModel.schema.post('save', function (doc: any) {
         if (doc && doc._id && !doc.isSystem) createdUnitIds.push(doc._id);
@@ -219,11 +227,19 @@ describe('Milestone 4 Step 4: Construction Units, Quantity Rules & Validation Go
 
   afterAll(async () => {
     if (isDbConnected) {
+      if (createdVariantIds.length > 0) {
+        const vIds = [...createdVariantIds];
+        createdVariantIds.length = 0;
+        await ProductVariantModel.deleteMany({ _id: { $in: vIds } });
+      }
+      if (createdSkuRegistryIds.length > 0) {
+        const sIds = [...createdSkuRegistryIds];
+        createdSkuRegistryIds.length = 0;
+        await SkuRegistryModel.deleteMany({ _id: { $in: sIds } });
+      }
       if (createdProductIds.length > 0) {
         const prodIds = [...createdProductIds];
         createdProductIds.length = 0;
-        await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
-        await SkuRegistryModel.deleteMany({ productId: { $in: prodIds } });
         await ProductModel.deleteMany({ _id: { $in: prodIds } });
       }
       if (createdCategoryIds.length > 0) {
@@ -254,11 +270,19 @@ describe('Milestone 4 Step 4: Construction Units, Quantity Rules & Validation Go
     if (!isDbConnected) return;
 
     // Fast, lightweight reset of ephemeral products/variants created during tests
+    if (createdVariantIds.length > 0) {
+      const vIds = [...createdVariantIds];
+      createdVariantIds.length = 0;
+      await ProductVariantModel.deleteMany({ _id: { $in: vIds } });
+    }
+    if (createdSkuRegistryIds.length > 0) {
+      const sIds = [...createdSkuRegistryIds];
+      createdSkuRegistryIds.length = 0;
+      await SkuRegistryModel.deleteMany({ _id: { $in: sIds } });
+    }
     if (createdProductIds.length > 0) {
       const prodIds = [...createdProductIds];
       createdProductIds.length = 0;
-      await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
-      await SkuRegistryModel.deleteMany({ productId: { $in: prodIds } });
       await ProductModel.deleteMany({ _id: { $in: prodIds } });
     }
 

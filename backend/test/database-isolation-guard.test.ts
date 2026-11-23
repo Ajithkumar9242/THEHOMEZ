@@ -6,6 +6,8 @@ import {
   parseMongoUri,
   registerTestDeletionSafetyHooks,
   TestDatabaseIsolationError,
+  TestFixtureRegistry,
+  assertSafeDeletionFilter,
 } from '../src/database/test-guard.js';
 import { validateConfig } from '../src/config/env.js';
 
@@ -304,27 +306,78 @@ describe('Test Database Isolation Guard & Safety Verification', () => {
       expect(caughtError.message).toContain('Destructive broad collection wipe rejected');
     });
 
-    it('permits deleteMany with explicitly owned document ID constraints', () => {
-      const testMongoose = new (mongoose.constructor as any)();
-      registerTestDeletionSafetyHooks(testMongoose);
+    describe('Exact-Target Ownership & Deletion Authorization', () => {
+      beforeEach(() => {
+        TestFixtureRegistry.getInstance().clear();
+      });
 
-      const testSchema = new testMongoose.Schema({ productId: testMongoose.Schema.Types.ObjectId });
-      const TestModel = testMongoose.model('SafetyHookPermittedIdTest', testSchema);
+      it('rejects deletion when a User ID is used to authorize Role deletion', () => {
+        const userId = new mongoose.Types.ObjectId();
+        TestFixtureRegistry.getInstance().registerCreatedFixture('User', userId);
 
-      const testId = new mongoose.Types.ObjectId();
-      const query = TestModel.deleteMany({ productId: { $in: [testId] } });
-      expect(query.getFilter()).toEqual({ productId: { $in: [testId] } });
-    });
+        expect(() => {
+          assertSafeDeletionFilter({ _id: userId }, 'Role');
+        }).toThrow(TestDatabaseIsolationError);
+      });
 
-    it('permits deleteMany with anchored test-scoped tokens', () => {
-      const testMongoose = new (mongoose.constructor as any)();
-      registerTestDeletionSafetyHooks(testMongoose);
+      it('rejects deletion when a Product ID is used to authorize Category deletion', () => {
+        const productId = new mongoose.Types.ObjectId();
+        TestFixtureRegistry.getInstance().registerCreatedFixture('Product', productId);
 
-      const testSchema = new testMongoose.Schema({ code: String });
-      const TestModel = testMongoose.model('SafetyHookPermittedTokenTest', testSchema);
+        expect(() => {
+          assertSafeDeletionFilter({ _id: productId }, 'Category');
+        }).toThrow(TestDatabaseIsolationError);
+      });
 
-      const query = TestModel.deleteMany({ code: /^UNIT_TEST_WRITER/ });
-      expect(query.getFilter()).toEqual({ code: /^UNIT_TEST_WRITER/ });
+      it('authorizes deletion only against the exact registered target', () => {
+        const roleId = new mongoose.Types.ObjectId();
+        TestFixtureRegistry.getInstance().registerCreatedFixture('Role', roleId);
+
+        // Permitted against Role
+        expect(() => {
+          assertSafeDeletionFilter({ _id: roleId }, 'Role');
+        }).not.toThrow();
+
+        // Rejected against User
+        expect(() => {
+          assertSafeDeletionFilter({ _id: roleId }, 'User');
+        }).toThrow(TestDatabaseIsolationError);
+      });
+
+      it('rejects deletion when target ID is unregistered', () => {
+        const unownedId = new mongoose.Types.ObjectId();
+        expect(() => {
+          assertSafeDeletionFilter({ _id: unownedId }, 'Product');
+        }).toThrow(TestDatabaseIsolationError);
+      });
+
+      it('rejects token-only deletion filters such as { code: "PARTNER_OPERATOR" }', () => {
+        expect(() => {
+          assertSafeDeletionFilter({ code: 'PARTNER_OPERATOR' }, 'Role');
+        }).toThrow(TestDatabaseIsolationError);
+      });
+
+      it('rejects foreign-key-only deletion filters such as { productId: ... } without _id', () => {
+        const prodId = new mongoose.Types.ObjectId();
+        TestFixtureRegistry.getInstance().registerCreatedFixture('Product', prodId);
+
+        expect(() => {
+          assertSafeDeletionFilter({ productId: prodId }, 'ProductPricing');
+        }).toThrow(TestDatabaseIsolationError);
+      });
+
+      it('rejects deletion against immutable collections permanently', () => {
+        const id = new mongoose.Types.ObjectId();
+        TestFixtureRegistry.getInstance().registerCreatedFixture('PriceHistory', id);
+
+        expect(() => {
+          assertSafeDeletionFilter({ _id: id }, 'PriceHistory');
+        }).toThrow(/CRITICAL IMMUTABILITY VIOLATION/);
+
+        expect(() => {
+          assertSafeDeletionFilter({ _id: id }, 'Collection(price_history)');
+        }).toThrow(/CRITICAL IMMUTABILITY VIOLATION/);
+      });
     });
   });
 });

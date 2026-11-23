@@ -11,6 +11,7 @@ import { TokenService } from '../src/services/token/token.service.js';
 import { UserType, UserStatus, PermissionCode } from '@thehomez/shared-types';
 import type { Application } from 'express';
 import { runCategoriesSeed } from '../src/seeds/categories.seed.js';
+import { registerTestFixture } from '../src/database/test-guard.js';
 
 describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', () => {
   let app: Application;
@@ -102,7 +103,10 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       );
-      if (role1) createdRoleIds.push(role1._id);
+      if (role1) {
+        createdRoleIds.push(role1._id);
+        registerTestFixture('Role', role1._id);
+      }
 
       catalogAdminUser = (await UserModel.findOneAndUpdate(
         { phone: '+919333000001' },
@@ -114,7 +118,10 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       )) as InstanceType<typeof UserModel>;
-      if (catalogAdminUser) createdUserIds.push(catalogAdminUser._id);
+      if (catalogAdminUser) {
+        createdUserIds.push(catalogAdminUser._id);
+        registerTestFixture('User', catalogAdminUser._id);
+      }
       catalogAdminToken = tokenService.signAccessToken(catalogAdminUser);
 
       // 2. Catalog Read Only (CATALOG_READ only)
@@ -129,7 +136,10 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       );
-      if (role2) createdRoleIds.push(role2._id);
+      if (role2) {
+        createdRoleIds.push(role2._id);
+        registerTestFixture('Role', role2._id);
+      }
 
       catalogReadOnlyUser = (await UserModel.findOneAndUpdate(
         { phone: '+919333000002' },
@@ -141,7 +151,10 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       )) as InstanceType<typeof UserModel>;
-      if (catalogReadOnlyUser) createdUserIds.push(catalogReadOnlyUser._id);
+      if (catalogReadOnlyUser) {
+        createdUserIds.push(catalogReadOnlyUser._id);
+        registerTestFixture('User', catalogReadOnlyUser._id);
+      }
       catalogReadOnlyToken = tokenService.signAccessToken(catalogReadOnlyUser);
 
       // 3. Unauthorized Staff User (lacks catalog permissions)
@@ -156,7 +169,10 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       );
-      if (role3) createdRoleIds.push(role3._id);
+      if (role3) {
+        createdRoleIds.push(role3._id);
+        registerTestFixture('Role', role3._id);
+      }
 
       unauthorizedUser = (await UserModel.findOneAndUpdate(
         { phone: '+919333000003' },
@@ -168,7 +184,10 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       )) as InstanceType<typeof UserModel>;
-      if (unauthorizedUser) createdUserIds.push(unauthorizedUser._id);
+      if (unauthorizedUser) {
+        createdUserIds.push(unauthorizedUser._id);
+        registerTestFixture('User', unauthorizedUser._id);
+      }
       unauthorizedToken = tokenService.signAccessToken(unauthorizedUser);
 
       // 4. Customer User
@@ -182,7 +201,10 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       )) as InstanceType<typeof UserModel>;
-      if (customerUser) createdUserIds.push(customerUser._id);
+      if (customerUser) {
+        createdUserIds.push(customerUser._id);
+        registerTestFixture('User', customerUser._id);
+      }
       customerToken = tokenService.signAccessToken(customerUser);
 
       // 5. Partner User
@@ -195,7 +217,10 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       );
-      if (partnerDoc) createdPartnerIds.push(partnerDoc._id);
+      if (partnerDoc) {
+        createdPartnerIds.push(partnerDoc._id);
+        registerTestFixture('Partner', partnerDoc._id);
+      }
 
       partnerUser = (await UserModel.findOneAndUpdate(
         { phone: '+919333000005' },
@@ -208,7 +233,11 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         },
         { upsert: true, new: true },
       )) as InstanceType<typeof UserModel>;
-      if (partnerUser) createdUserIds.push(partnerUser._id);
+      if (partnerUser) {
+        createdUserIds.push(partnerUser._id);
+        registerTestFixture('User', partnerUser._id);
+      }
+      partnerToken = tokenService.signAccessToken(partnerUser);
       partnerToken = tokenService.signAccessToken(partnerUser);
     }
   });

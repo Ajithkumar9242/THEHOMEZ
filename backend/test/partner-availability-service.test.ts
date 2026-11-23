@@ -51,9 +51,18 @@ describe('Milestone 4 Step 6: Subtask 6.3A — PartnerAvailabilityService Domain
   let draftVariant: IProductVariantDocument;
   let foreignParent: IProductDocument;
   let foreignVariant: IProductVariantDocument;
+  const createdPartnerProductIds: Types.ObjectId[] = [];
+  const createdVariantIds: Types.ObjectId[] = [];
 
   beforeAll(async () => {
     await connectDatabase();
+
+    PartnerProductModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdPartnerProductIds.push(doc._id);
+    });
+    ProductVariantModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdVariantIds.push(doc._id);
+    });
 
     // Sync authoritative indexes
     await PartnerProductModel.syncIndexes();
@@ -307,13 +316,21 @@ describe('Milestone 4 Step 6: Subtask 6.3A — PartnerAvailabilityService Domain
     const areaIds = [serviceAreaId1, serviceAreaId2, inactiveServiceAreaId].filter(Boolean);
     const catIds = [categoryId, subcategoryId].filter(Boolean);
 
+    if (createdPartnerProductIds.length > 0) {
+      const ppIds = [...createdPartnerProductIds];
+      createdPartnerProductIds.length = 0;
+      await PartnerProductModel.deleteMany({ _id: { $in: ppIds } });
+    }
     if (partnerIds.length > 0) {
-      await PartnerProductModel.deleteMany({ partnerId: { $in: partnerIds } });
-      await PartnerAvailabilityHistoryModel.deleteMany({ partnerId: { $in: partnerIds } });
       await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
     }
+    const variantIds = [childVariant1?._id, childVariant2?._id, draftVariant?._id, foreignVariant?._id].filter(Boolean);
+    const allVariantIds = Array.from(new Set([...variantIds, ...createdVariantIds]));
+    if (allVariantIds.length > 0) {
+      createdVariantIds.length = 0;
+      await ProductVariantModel.deleteMany({ _id: { $in: allVariantIds } });
+    }
     if (productIds.length > 0) {
-      await ProductVariantModel.deleteMany({ productId: { $in: productIds } });
       await ProductModel.deleteMany({ _id: { $in: productIds } });
     }
     if (areaIds.length > 0) {

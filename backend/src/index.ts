@@ -3,7 +3,13 @@
  */
 import { fileURLToPath } from 'node:url';
 import { UserType, UnitOfMeasure } from '@thehomez/shared-types';
-import { startServer, gracefulShutdown, type RunningServer } from './server.js';
+import {
+  startServer,
+  startAdminVerificationServer,
+  gracefulShutdown,
+  type RunningServer,
+  type GuardedAdminVerificationOptions,
+} from './server.js';
 import { createApp } from './app.js';
 import { getConfig, validateConfig, type AppConfig } from './config/env.js';
 import { logger, createLogger } from './logger/logger.js';
@@ -27,6 +33,7 @@ export const BACKEND_INIT_METADATA = {
 export {
   createApp,
   startServer,
+  startAdminVerificationServer,
   gracefulShutdown,
   getConfig,
   validateConfig,
@@ -38,7 +45,7 @@ export {
   getDatabaseDiagnostics,
   withTransaction,
 };
-export type { RunningServer, AppConfig };
+export type { RunningServer, AppConfig, GuardedAdminVerificationOptions };
 
 // Auto-start server if executed directly via node or tsx
 const isDirectExecution =

@@ -11,6 +11,7 @@ describe('TokenService — JWT & Refresh Token Lifecycle with Reuse Detection', 
   let isDbConnected = false;
   let tokenService: TokenService;
   let testUser: IUserDocument;
+  const createdTokenIds: mongoose.Types.ObjectId[] = [];
 
   beforeAll(async () => {
     try {
@@ -23,6 +24,10 @@ describe('TokenService — JWT & Refresh Token Lifecycle with Reuse Detection', 
     tokenService = new TokenService();
 
     if (isDbConnected) {
+      RefreshTokenModel.schema.post('save', function (doc: any) {
+        if (doc?._id) createdTokenIds.push(doc._id);
+      });
+
       testUser = await UserModel.create({
         phone: '+919888877777',
         userType: UserType.CUSTOMER,
@@ -34,8 +39,14 @@ describe('TokenService — JWT & Refresh Token Lifecycle with Reuse Detection', 
 
   afterAll(async () => {
     if (isDbConnected) {
-      await UserModel.deleteMany({ phone: '+919888877777' });
-      await RefreshTokenModel.deleteMany({ userId: testUser._id });
+      if (createdTokenIds.length > 0) {
+        const tokenIds = [...createdTokenIds];
+        createdTokenIds.length = 0;
+        await RefreshTokenModel.deleteMany({ _id: { $in: tokenIds } });
+      }
+      if (testUser?._id) {
+        await UserModel.deleteMany({ _id: testUser._id });
+      }
       await disconnectDatabase();
     }
   });

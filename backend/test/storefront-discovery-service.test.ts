@@ -72,6 +72,9 @@ describe('Milestone 4 Step 7: Subtask 7.2B — StorefrontDiscoveryService Domain
   const createdPartnerIds: Types.ObjectId[] = [];
   const createdUserIds: Types.ObjectId[] = [];
   const createdProductIds: Types.ObjectId[] = [];
+  const createdPricingIds: Types.ObjectId[] = [];
+  const createdVariantIds: Types.ObjectId[] = [];
+  const createdPartnerProductIds: Types.ObjectId[] = [];
 
   // Query Profiling Harness
   interface MongooseQueryLog {
@@ -83,6 +86,16 @@ describe('Milestone 4 Step 7: Subtask 7.2B — StorefrontDiscoveryService Domain
 
   beforeAll(async () => {
     await connectDatabase();
+
+    ProductPricingModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdPricingIds.push(doc._id);
+    });
+    ProductVariantModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdVariantIds.push(doc._id);
+    });
+    PartnerProductModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdPartnerProductIds.push(doc._id);
+    });
 
     // Attach Mongoose query profiler
     mongoose.set('debug', (collection: string, method: string) => {
@@ -561,10 +574,22 @@ describe('Milestone 4 Step 7: Subtask 7.2B — StorefrontDiscoveryService Domain
 
   afterAll(async () => {
     isProfiling = false;
+    if (createdPricingIds.length > 0) {
+      const pIds = [...createdPricingIds];
+      createdPricingIds.length = 0;
+      await ProductPricingModel.deleteMany({ _id: { $in: pIds } });
+    }
+    if (createdVariantIds.length > 0) {
+      const vIds = [...createdVariantIds];
+      createdVariantIds.length = 0;
+      await ProductVariantModel.deleteMany({ _id: { $in: vIds } });
+    }
+    if (createdPartnerProductIds.length > 0) {
+      const ppIds = [...createdPartnerProductIds];
+      createdPartnerProductIds.length = 0;
+      await PartnerProductModel.deleteMany({ _id: { $in: ppIds } });
+    }
     if (createdProductIds.length > 0) {
-      await ProductPricingModel.deleteMany({ productId: { $in: createdProductIds } });
-      await ProductVariantModel.deleteMany({ productId: { $in: createdProductIds } });
-      await PartnerProductModel.deleteMany({ productId: { $in: createdProductIds } });
       await ProductModel.deleteMany({ _id: { $in: createdProductIds } });
       createdProductIds.length = 0;
     }

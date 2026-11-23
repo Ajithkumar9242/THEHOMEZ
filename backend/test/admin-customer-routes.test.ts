@@ -49,6 +49,9 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
 
   const createdUserIds: Types.ObjectId[] = [];
   const createdRoleIds: Types.ObjectId[] = [];
+  const createdAddressIds: Types.ObjectId[] = [];
+  const createdTokenIds: Types.ObjectId[] = [];
+  const createdAuditLogIds: Types.ObjectId[] = [];
 
   beforeAll(async () => {
     try {
@@ -63,6 +66,16 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
     app = createApp();
 
     if (isDbConnected) {
+      CustomerAddressModel.schema.post('save', function (doc: any) {
+        if (doc?._id) createdAddressIds.push(doc._id);
+      });
+      RefreshTokenModel.schema.post('save', function (doc: any) {
+        if (doc?._id) createdTokenIds.push(doc._id);
+      });
+      CustomerAuditLogModel.schema.post('save', function (doc: any) {
+        if (doc?._id) createdAuditLogIds.push(doc._id);
+      });
+
       // 1. Service Area for Address enrichment
       _testServiceArea = await ServiceAreaModel.create({
         code: 'TEST-CUST-SA-1',
@@ -259,11 +272,25 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
 
   afterAll(async () => {
     if (isDbConnected) {
+      if (createdAuditLogIds.length > 0) {
+        const ids = [...createdAuditLogIds];
+        createdAuditLogIds.length = 0;
+        await CustomerAuditLogModel.deleteMany({ _id: { $in: ids } });
+      }
+      if (createdAddressIds.length > 0) {
+        const ids = [...createdAddressIds];
+        createdAddressIds.length = 0;
+        await CustomerAddressModel.deleteMany({ _id: { $in: ids } });
+      }
+      if (createdTokenIds.length > 0) {
+        const ids = [...createdTokenIds];
+        createdTokenIds.length = 0;
+        await RefreshTokenModel.deleteMany({ _id: { $in: ids } });
+      }
       if (createdUserIds.length > 0) {
-        await CustomerAuditLogModel.deleteMany({ targetUserId: { $in: createdUserIds } });
-        await CustomerAddressModel.deleteMany({ userId: { $in: createdUserIds } });
-        await RefreshTokenModel.deleteMany({ userId: { $in: createdUserIds } });
-        await UserModel.deleteMany({ _id: { $in: createdUserIds } });
+        const ids = [...createdUserIds];
+        createdUserIds.length = 0;
+        await UserModel.deleteMany({ _id: { $in: ids } });
       }
       if (_testServiceArea?._id) {
         await ServiceAreaModel.deleteMany({ _id: _testServiceArea._id });

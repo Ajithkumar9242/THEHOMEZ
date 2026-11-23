@@ -40,6 +40,32 @@ function authKeyGenerator(req: Request): string {
     }
   }
 
+  if (req.body && typeof req.body.email === 'string') {
+    const normalizedEmail = req.body.email.trim().toLowerCase();
+    return `${clientIp}_${normalizedEmail}`;
+  }
+
+  const rawMfaToken =
+    (req.body && typeof req.body.mfaToken === 'string' && req.body.mfaToken.trim()) ||
+    (req.headers.authorization &&
+      req.headers.authorization.startsWith('Bearer ') &&
+      req.headers.authorization.slice(7).trim());
+
+  if (rawMfaToken) {
+    try {
+      const parts = rawMfaToken.split('.');
+      if (parts.length === 3 && parts[1]) {
+        const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf8');
+        const parsed = JSON.parse(payloadJson) as { sub?: string };
+        if (parsed && typeof parsed.sub === 'string' && parsed.sub.trim().length > 0) {
+          return `${clientIp}_${parsed.sub.trim()}`;
+        }
+      }
+    } catch {
+      // Fall back to clientIp
+    }
+  }
+
   return clientIp;
 }
 

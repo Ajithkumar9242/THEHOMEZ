@@ -88,9 +88,23 @@ describe('Milestone 4 Step 7: Consumer Storefront Discovery & Browsing — Compl
   const createdPartnerIds: mongoose.Types.ObjectId[] = [];
   const createdUserIds: mongoose.Types.ObjectId[] = [];
   const createdProductIds: mongoose.Types.ObjectId[] = [];
+  const createdPricingIds: mongoose.Types.ObjectId[] = [];
+  const createdVariantIds: mongoose.Types.ObjectId[] = [];
+  const createdPartnerProductIds: mongoose.Types.ObjectId[] = [];
 
   beforeAll(async () => {
     await connectDatabase();
+
+    ProductPricingModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdPricingIds.push(doc._id);
+    });
+    ProductVariantModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdVariantIds.push(doc._id);
+    });
+    PartnerProductModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdPartnerProductIds.push(doc._id);
+    });
+
     await seedApprovedUnits();
 
     tokenService = new TokenService();
@@ -650,10 +664,22 @@ describe('Milestone 4 Step 7: Consumer Storefront Discovery & Browsing — Compl
 
   afterAll(async () => {
     isProfiling = false;
+    if (createdPricingIds.length > 0) {
+      const pIds = [...createdPricingIds];
+      createdPricingIds.length = 0;
+      await ProductPricingModel.deleteMany({ _id: { $in: pIds } });
+    }
+    if (createdVariantIds.length > 0) {
+      const vIds = [...createdVariantIds];
+      createdVariantIds.length = 0;
+      await ProductVariantModel.deleteMany({ _id: { $in: vIds } });
+    }
+    if (createdPartnerProductIds.length > 0) {
+      const ppIds = [...createdPartnerProductIds];
+      createdPartnerProductIds.length = 0;
+      await PartnerProductModel.deleteMany({ _id: { $in: ppIds } });
+    }
     if (createdProductIds.length > 0) {
-      await ProductPricingModel.deleteMany({ productId: { $in: createdProductIds } });
-      await ProductVariantModel.deleteMany({ productId: { $in: createdProductIds } });
-      await PartnerProductModel.deleteMany({ productId: { $in: createdProductIds } });
       await ProductModel.deleteMany({ _id: { $in: createdProductIds } });
       createdProductIds.length = 0;
     }
@@ -666,7 +692,6 @@ describe('Milestone 4 Step 7: Consumer Storefront Discovery & Browsing — Compl
       createdServiceAreaIds.length = 0;
     }
     if (createdPartnerIds.length > 0) {
-      await PartnerProductModel.deleteMany({ partnerId: { $in: createdPartnerIds } });
       await PartnerModel.deleteMany({ _id: { $in: createdPartnerIds } });
       createdPartnerIds.length = 0;
     }

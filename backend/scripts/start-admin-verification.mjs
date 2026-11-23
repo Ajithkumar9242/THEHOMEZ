@@ -62,8 +62,6 @@ for (const [name, value] of parsedMongoUri.searchParams) {
 }
 
 let config;
-let database;
-let logger;
 let getConfigFromEnvironment;
 try {
   ({ getConfig: getConfigFromEnvironment } = await import('../src/config/env.ts'));
@@ -75,61 +73,14 @@ try {
   ) {
     fail('Validated backend settings did not preserve the required port, development mode, or Admin origin.');
   }
-
-  database = await import('../src/database/database.ts');
-  ({ logger } = await import('../src/logger/logger.ts'));
 } catch {
   fail('Verification configuration could not be validated; no connection was attempted.');
 }
 
-// Suppress connection diagnostics while credentials are in use. Restore the configured
-// application log level only after the connected database name has passed the guard.
-const configuredLogLevel = config.logging.level;
-logger.level = 'silent';
-
 try {
-  await database.connectDatabase();
-} catch {
-  try {
-    await database.disconnectDatabase();
-  } catch {
-    // Keep failure output static and credential-free.
-  }
-  fail('MongoDB connection failed; backend startup and role seeding were not run.');
-}
-
-let diagnostics;
-try {
-  diagnostics = database.getDatabaseDiagnostics();
-} catch {
-  try {
-    await database.disconnectDatabase();
-  } catch {
-    // Keep failure output static and credential-free.
-  }
-  fail('Database diagnostics failed; backend startup and role seeding were not run.');
-}
-
-if (diagnostics?.status !== 'connected' || diagnostics?.name !== targetDatabase) {
-  try {
-    await database.disconnectDatabase();
-  } catch {
-    // Keep failure output static and credential-free.
-  }
-  fail('Connected database verification failed; backend startup and role seeding were not run.');
-}
-
-logger.level = configuredLogLevel;
-console.info('[admin-verification] Isolated database verified; continuing with normal backend startup.');
-
-try {
-  const { startServer } = await import('../src/server.ts');
-  await startServer();
-} catch {
-  try {
-    await database.disconnectDatabase();
-  } catch {
-    // Keep failure output static and credential-free.
-  }
-  fail('Backend startup failed after database verification.');
+  const { startAdminVerificationServer } = await import('../src/server.ts');
+  console.info('[admin-verification] Starting guarded Admin verification backend (no-seed, no-autoindex)...');
+  await startAdminVerificationServer({ mode: 'admin-verification' });
+} catch (error) {
+  fail(`Guarded backend startup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
 }

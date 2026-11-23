@@ -6,6 +6,7 @@ import { connectDatabase, disconnectDatabase } from '../src/database/database.js
 
 describe('Mongoose Authentication & Identity Models', () => {
   let isDbConnected = false;
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
 
   beforeAll(async () => {
     try {
@@ -18,11 +19,11 @@ describe('Mongoose Authentication & Identity Models', () => {
 
   afterAll(async () => {
     if (isDbConnected) {
-      // Clean up test collections
-      await UserModel.deleteMany({ phone: { $regex: /^\+91000/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^TEST_/ } });
-      await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+91000/ } });
-      await RefreshTokenModel.deleteMany({ familyId: { $regex: /^test-family-/ } });
+      if (createdUserIds.length > 0) {
+        const uIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await UserModel.deleteMany({ _id: { $in: uIds } });
+      }
       await disconnectDatabase();
     }
   });
@@ -88,9 +89,6 @@ describe('Mongoose Authentication & Identity Models', () => {
 
       const phone = '+910001112233';
 
-      // Clean up prior runs
-      await UserModel.deleteMany({ phone });
-
       // 1. Create CUSTOMER identity for phone
       const customer = await UserModel.create({
         phone,
@@ -98,6 +96,7 @@ describe('Mongoose Authentication & Identity Models', () => {
         status: UserStatus.ACTIVE,
       });
       expect(customer._id).toBeDefined();
+      createdUserIds.push(customer._id);
 
       // 2. Allow separate PARTNER identity for the SAME phone number
       const partner = await UserModel.create({
@@ -108,6 +107,7 @@ describe('Mongoose Authentication & Identity Models', () => {
       });
       expect(partner._id).toBeDefined();
       expect(partner._id.toString()).not.toBe(customer._id.toString());
+      createdUserIds.push(partner._id);
 
       // 3. Reject duplicate identity for the identical (phone, userType) tuple
       await expect(
@@ -119,7 +119,8 @@ describe('Mongoose Authentication & Identity Models', () => {
       ).rejects.toThrow();
 
       // Clean up
-      await UserModel.deleteMany({ phone });
+      await UserModel.deleteMany({ _id: { $in: [customer._id, partner._id] } });
+      createdUserIds.length = 0;
     });
   });
 

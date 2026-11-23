@@ -5,6 +5,9 @@ import type {
   IAuthUser,
   ILogoutResponse,
   IRefreshTokenResponse,
+  IAdminLoginChallengeResponse,
+  IAdminMfaSetupResponse,
+  IAdminBackupCodesResponse,
 } from '@thehomez/shared-types';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/+$/, '');
@@ -83,6 +86,79 @@ async function request<T>(path: string, init: RequestInit = {}, token = accessTo
 }
 
 export const authApi = {
+  async login(email: string, password: string): Promise<IAdminLoginChallengeResponse> {
+    const response = await request<IAdminLoginChallengeResponse>(
+      '/auth/admin/login',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      },
+      null,
+    );
+    return response;
+  },
+  async mfaSetup(mfaToken: string): Promise<IAdminMfaSetupResponse> {
+    const response = await request<IAdminMfaSetupResponse>(
+      '/auth/admin/mfa/setup',
+      {
+        method: 'POST',
+        body: JSON.stringify({ mfaToken }),
+      },
+      null,
+    );
+    return response;
+  },
+  async mfaVerifySetup(mfaToken: string, code: string): Promise<IAuthUser> {
+    const response = await request<IAuthResponse>(
+      '/auth/admin/mfa/verify-setup',
+      {
+        method: 'POST',
+        body: JSON.stringify({ mfaToken, code }),
+      },
+      null,
+    );
+    if (!response?.tokens?.accessToken) {
+      throw new ApiError('Invalid authentication response.', 500, 'INVALID_AUTH_RESPONSE');
+    }
+    accessToken = response.tokens.accessToken;
+    return response.user;
+  },
+  async mfaVerify(mfaToken: string, code: string): Promise<IAuthUser> {
+    const response = await request<IAuthResponse>(
+      '/auth/admin/mfa/verify',
+      {
+        method: 'POST',
+        body: JSON.stringify({ mfaToken, code }),
+      },
+      null,
+    );
+    if (!response?.tokens?.accessToken) {
+      throw new ApiError('Invalid authentication response.', 500, 'INVALID_AUTH_RESPONSE');
+    }
+    accessToken = response.tokens.accessToken;
+    return response.user;
+  },
+  async mfaVerifyBackup(mfaToken: string, backupCode: string): Promise<IAuthUser> {
+    const response = await request<IAuthResponse>(
+      '/auth/admin/mfa/verify-backup',
+      {
+        method: 'POST',
+        body: JSON.stringify({ mfaToken, backupCode }),
+      },
+      null,
+    );
+    if (!response?.tokens?.accessToken) {
+      throw new ApiError('Invalid authentication response.', 500, 'INVALID_AUTH_RESPONSE');
+    }
+    accessToken = response.tokens.accessToken;
+    return response.user;
+  },
+  async regenerateBackupCodes(password: string): Promise<IAdminBackupCodesResponse> {
+    return await request<IAdminBackupCodesResponse>('/auth/admin/mfa/backup-codes/regenerate', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  },
   async loginWithPassword(email: string, password: string): Promise<IAuthUser> {
     const response = await request<IAuthResponse>(
       '/auth/admin/password',

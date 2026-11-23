@@ -18,6 +18,7 @@ import { PricingEngineService } from '../src/services/pricing/pricing-engine.ser
 import { ProductService } from '../src/services/catalog/product.service.js';
 import { ProductVariantService } from '../src/services/catalog/product-variant.service.js';
 import { seedApprovedUnits } from '../src/seeds/units.seed.js';
+import { registerTestFixture } from '../src/database/test-guard.js';
 import { UserType, UserStatus, PermissionCode } from '@thehomez/shared-types';
 import type { Application } from 'express';
 
@@ -55,6 +56,8 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
 
   // Tracked In-Memory Document IDs for Current-Run Positive Ownership
   const createdProductIds: mongoose.Types.ObjectId[] = [];
+  const createdVariantIds: mongoose.Types.ObjectId[] = [];
+  const createdPricingIds: mongoose.Types.ObjectId[] = [];
   const createdCategoryIds: mongoose.Types.ObjectId[] = [];
   const createdServiceAreaIds: mongoose.Types.ObjectId[] = [];
   const createdRoleIds: mongoose.Types.ObjectId[] = [];
@@ -75,6 +78,32 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
     productVariantService = new ProductVariantService();
     app = createApp();
 
+    ProductModel.schema.post('save', (doc: any) => {
+      if (doc?._id && !createdProductIds.some((id) => id.equals(doc._id))) {
+        createdProductIds.push(doc._id);
+      }
+    });
+    ProductVariantModel.schema.post('save', (doc: any) => {
+      if (doc?._id && !createdVariantIds.some((id) => id.equals(doc._id))) {
+        createdVariantIds.push(doc._id);
+      }
+    });
+    ProductPricingModel.schema.post('save', (doc: any) => {
+      if (doc?._id && !createdPricingIds.some((id) => id.equals(doc._id))) {
+        createdPricingIds.push(doc._id);
+      }
+    });
+    CategoryModel.schema.post('save', (doc: any) => {
+      if (doc?._id && !createdCategoryIds.some((id) => id.equals(doc._id))) {
+        createdCategoryIds.push(doc._id);
+      }
+    });
+    ServiceAreaModel.schema.post('save', (doc: any) => {
+      if (doc?._id && !createdServiceAreaIds.some((id) => id.equals(doc._id))) {
+        createdServiceAreaIds.push(doc._id);
+      }
+    });
+
     if (isDbConnected) {
       await seedApprovedUnits();
     }
@@ -90,13 +119,21 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
   async function cleanDatabase() {
     if (!isDbConnected) return;
 
-    // 1. Cascade delete pricings, price histories, variants, and products ONLY for tracked test products
+    if (createdPricingIds.length > 0) {
+      const ids = [...createdPricingIds];
+      createdPricingIds.length = 0;
+      await ProductPricingModel.deleteMany({ _id: { $in: ids } });
+    }
+
+    if (createdVariantIds.length > 0) {
+      const ids = [...createdVariantIds];
+      createdVariantIds.length = 0;
+      await ProductVariantModel.deleteMany({ _id: { $in: ids } });
+    }
+
     if (createdProductIds.length > 0) {
       const prodIds = [...createdProductIds];
       createdProductIds.length = 0;
-      await ProductPricingModel.deleteMany({ productId: { $in: prodIds } });
-      await mongoose.connection.collection('price_history').deleteMany({ productId: { $in: prodIds } });
-      await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
       await ProductModel.deleteMany({ _id: { $in: prodIds } });
     }
 
@@ -184,7 +221,10 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
       },
       { upsert: true, new: true },
     );
-    if (role1) createdRoleIds.push(role1._id);
+    if (role1) {
+      createdRoleIds.push(role1._id);
+      registerTestFixture('Role', role1._id);
+    }
 
     const role2 = await RoleModel.findOneAndUpdate(
       { code: 'AUDIT_TEST_PUBLISHER' },
@@ -203,7 +243,10 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
       },
       { upsert: true, new: true },
     );
-    if (role2) createdRoleIds.push(role2._id);
+    if (role2) {
+      createdRoleIds.push(role2._id);
+      registerTestFixture('Role', role2._id);
+    }
 
     const role3 = await RoleModel.findOneAndUpdate(
       { code: 'AUDIT_TEST_READONLY' },
@@ -216,9 +259,12 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
       },
       { upsert: true, new: true },
     );
-    if (role3) createdRoleIds.push(role3._id);
+    if (role3) {
+      createdRoleIds.push(role3._id);
+      registerTestFixture('Role', role3._id);
+    }
 
-    const role4 = await RoleModel.findOneAndUpdate(
+    await RoleModel.findOneAndUpdate(
       { code: 'B2B_CUSTOMER' },
       {
         code: 'B2B_CUSTOMER',
@@ -229,7 +275,6 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
       },
       { upsert: true, new: true },
     );
-    if (role4) createdRoleIds.push(role4._id);
 
     catalogWriterUser = (await UserModel.findOneAndUpdate(
       { phone: '+919777000001' },
@@ -241,7 +286,10 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
-    if (catalogWriterUser) createdUserIds.push(catalogWriterUser._id);
+    if (catalogWriterUser) {
+      createdUserIds.push(catalogWriterUser._id);
+      registerTestFixture('User', catalogWriterUser._id);
+    }
 
     catalogPublisherUser = (await UserModel.findOneAndUpdate(
       { phone: '+919777000002' },
@@ -253,7 +301,10 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
-    if (catalogPublisherUser) createdUserIds.push(catalogPublisherUser._id);
+    if (catalogPublisherUser) {
+      createdUserIds.push(catalogPublisherUser._id);
+      registerTestFixture('User', catalogPublisherUser._id);
+    }
 
     readOnlyUser = (await UserModel.findOneAndUpdate(
       { phone: '+919777000003' },
@@ -265,7 +316,10 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
-    if (readOnlyUser) createdUserIds.push(readOnlyUser._id);
+    if (readOnlyUser) {
+      createdUserIds.push(readOnlyUser._id);
+      registerTestFixture('User', readOnlyUser._id);
+    }
 
     b2bCustomerUser = (await UserModel.findOneAndUpdate(
       { phone: '+919777000004' },
@@ -277,7 +331,10 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
-    if (b2bCustomerUser) createdUserIds.push(b2bCustomerUser._id);
+    if (b2bCustomerUser) {
+      createdUserIds.push(b2bCustomerUser._id);
+      registerTestFixture('User', b2bCustomerUser._id);
+    }
 
     regularCustomerUser = (await UserModel.findOneAndUpdate(
       { phone: '+919777000005' },
@@ -289,7 +346,10 @@ describe('Milestone 4 Step 5.7: Independent Verification & Security Audit Suite'
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
-    if (regularCustomerUser) createdUserIds.push(regularCustomerUser._id);
+    if (regularCustomerUser) {
+      createdUserIds.push(regularCustomerUser._id);
+      registerTestFixture('User', regularCustomerUser._id);
+    }
 
     _catalogWriterToken = tokenService.signAccessToken(catalogWriterUser);
     catalogPublisherToken = tokenService.signAccessToken(catalogPublisherUser);

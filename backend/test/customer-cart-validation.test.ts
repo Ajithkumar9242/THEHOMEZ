@@ -94,6 +94,9 @@ describe('Milestone 5B.3: Cart Validation & Price Acknowledgement (Backend)', ()
   const createdPartnerProductIds: Types.ObjectId[] = [];
   const createdServiceAreaIds: Types.ObjectId[] = [];
   const createdAddressIds: Types.ObjectId[] = [];
+  const createdCartIds: Types.ObjectId[] = [];
+  const createdSnapshotIds: Types.ObjectId[] = [];
+  const createdCheckoutSessionIds: Types.ObjectId[] = [];
 
   const testPhonePrefix = '+9194446';
   const testSlugPrefix = 'cart-val-test-';
@@ -153,22 +156,21 @@ describe('Milestone 5B.3: Cart Validation & Price Acknowledgement (Backend)', ()
   async function cleanupTestFixtures(): Promise<void> {
     if (!isDbConnected) return;
 
-    await CartModel.deleteMany({
-      $or: [
-        { userId: { $in: createdUserIds } },
-        {
-          ownerType: 'GUEST',
-          sessionTokenHash: { $in: [hashToken(guestToken1)] },
-        },
-      ],
-    });
-    await CartValidationSnapshotModel.deleteMany({
-      $or: [
-        { userId: { $in: createdUserIds } },
-        { sessionTokenHash: hashToken(guestToken1) },
-      ],
-    });
-    await CheckoutSessionModel.deleteMany({ userId: { $in: createdUserIds } });
+    if (createdCartIds.length > 0) {
+      const ids = [...createdCartIds];
+      createdCartIds.length = 0;
+      await CartModel.deleteMany({ _id: { $in: ids } });
+    }
+    if (createdSnapshotIds.length > 0) {
+      const ids = [...createdSnapshotIds];
+      createdSnapshotIds.length = 0;
+      await CartValidationSnapshotModel.deleteMany({ _id: { $in: ids } });
+    }
+    if (createdCheckoutSessionIds.length > 0) {
+      const ids = [...createdCheckoutSessionIds];
+      createdCheckoutSessionIds.length = 0;
+      await CheckoutSessionModel.deleteMany({ _id: { $in: ids } });
+    }
 
     if (createdAddressIds.length > 0) {
       await CustomerAddressModel.deleteMany({ _id: { $in: createdAddressIds } });
@@ -197,15 +199,6 @@ describe('Milestone 5B.3: Cart Validation & Price Acknowledgement (Backend)', ()
     if (createdUserIds.length > 0) {
       await UserModel.deleteMany({ _id: { $in: createdUserIds } });
     }
-
-    // Defensive cleanup
-    await ProductModel.deleteMany({ slug: { $regex: /^cart-val-test-/ } });
-    await ProductVariantModel.deleteMany({ sku: { $regex: /^CARTVALTEST-/ } });
-    await CategoryModel.deleteMany({ slug: { $regex: /^cart-val-test-/ } });
-    await ServiceAreaModel.deleteMany({ code: { $regex: /^CARTVAL-TEST-SA-/ } });
-    await PartnerModel.deleteMany({ phone: { $regex: /^\+9194446/ } });
-    await UserModel.deleteMany({ phone: { $regex: /^\+9194446/ } });
-    await CustomerAddressModel.deleteMany({ phone: { $regex: /^\+9194446/ } });
   }
 
   // ============================================================
@@ -226,6 +219,19 @@ describe('Milestone 5B.3: Cart Validation & Price Acknowledgement (Backend)', ()
     app = createApp();
 
     if (!isDbConnected) return;
+
+    CartModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdCartIds.push(doc._id);
+    });
+    CartModel.schema.post('findOneAndUpdate', function (doc: any) {
+      if (doc?._id) createdCartIds.push(doc._id);
+    });
+    CartValidationSnapshotModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdSnapshotIds.push(doc._id);
+    });
+    CheckoutSessionModel.schema.post('save', function (doc: any) {
+      if (doc?._id) createdCheckoutSessionIds.push(doc._id);
+    });
 
     await cleanupTestFixtures();
     await seedApprovedUnits();
@@ -535,22 +541,21 @@ describe('Milestone 5B.3: Cart Validation & Price Acknowledgement (Backend)', ()
     if (!isDbConnected) return;
 
     // Clear all carts between tests
-    await CartModel.deleteMany({
-      $or: [
-        { userId: { $in: createdUserIds } },
-        {
-          ownerType: 'GUEST',
-          sessionTokenHash: { $in: [hashToken(guestToken1)] },
-        },
-      ],
-    });
-    await CartValidationSnapshotModel.deleteMany({
-      $or: [
-        { userId: { $in: createdUserIds } },
-        { sessionTokenHash: hashToken(guestToken1) },
-      ],
-    });
-    await CheckoutSessionModel.deleteMany({ userId: { $in: createdUserIds } });
+    if (createdCartIds.length > 0) {
+      const ids = [...createdCartIds];
+      createdCartIds.length = 0;
+      await CartModel.deleteMany({ _id: { $in: ids } });
+    }
+    if (createdSnapshotIds.length > 0) {
+      const ids = [...createdSnapshotIds];
+      createdSnapshotIds.length = 0;
+      await CartValidationSnapshotModel.deleteMany({ _id: { $in: ids } });
+    }
+    if (createdCheckoutSessionIds.length > 0) {
+      const ids = [...createdCheckoutSessionIds];
+      createdCheckoutSessionIds.length = 0;
+      await CheckoutSessionModel.deleteMany({ _id: { $in: ids } });
+    }
 
     // Clear addresses
     if (createdAddressIds.length > 0) {

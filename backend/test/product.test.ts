@@ -12,6 +12,7 @@ import { UserModel } from '../src/models/user.model.js';
 import { RoleModel } from '../src/models/role.model.js';
 import { TokenService } from '../src/services/token/token.service.js';
 import { seedApprovedUnits } from '../src/seeds/units.seed.js';
+import { registerTestFixture } from '../src/database/test-guard.js';
 import { UserType, UserStatus, PermissionCode } from '@thehomez/shared-types';
 import type { Application } from 'express';
 
@@ -41,6 +42,9 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
 
   // Tracked In-Memory Document IDs for Current-Run Positive Ownership
   const createdProductIds: mongoose.Types.ObjectId[] = [];
+  const createdVariantIds: mongoose.Types.ObjectId[] = [];
+  const createdPricingIds: mongoose.Types.ObjectId[] = [];
+  const createdSkuRegistryIds: mongoose.Types.ObjectId[] = [];
   const createdCategoryIds: mongoose.Types.ObjectId[] = [];
   const createdRoleIds: mongoose.Types.ObjectId[] = [];
   const createdUserIds: mongoose.Types.ObjectId[] = [];
@@ -59,10 +63,24 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
     if (isDbConnected) {
       await seedApprovedUnits();
 
-      // Intercept all products saved during test run to prove current-run ownership
       ProductModel.schema.post('save', function (doc: any) {
-        if (doc && doc._id) {
+        if (doc && doc._id && !createdProductIds.some((id) => id.equals(doc._id))) {
           createdProductIds.push(doc._id);
+        }
+      });
+      ProductVariantModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id && !createdVariantIds.some((id) => id.equals(doc._id))) {
+          createdVariantIds.push(doc._id);
+        }
+      });
+      ProductPricingModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id && !createdPricingIds.some((id) => id.equals(doc._id))) {
+          createdPricingIds.push(doc._id);
+        }
+      });
+      SkuRegistryModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id && !createdSkuRegistryIds.some((id) => id.equals(doc._id))) {
+          createdSkuRegistryIds.push(doc._id);
         }
       });
     }
@@ -78,13 +96,27 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
   async function cleanTestFixtures() {
     if (!isDbConnected) return;
 
+    if (createdPricingIds.length > 0) {
+      const ids = [...createdPricingIds];
+      createdPricingIds.length = 0;
+      await ProductPricingModel.deleteMany({ _id: { $in: ids } });
+    }
+
+    if (createdSkuRegistryIds.length > 0) {
+      const ids = [...createdSkuRegistryIds];
+      createdSkuRegistryIds.length = 0;
+      await SkuRegistryModel.deleteMany({ _id: { $in: ids } });
+    }
+
+    if (createdVariantIds.length > 0) {
+      const ids = [...createdVariantIds];
+      createdVariantIds.length = 0;
+      await ProductVariantModel.deleteMany({ _id: { $in: ids } });
+    }
+
     if (createdProductIds.length > 0) {
       const prodIds = [...createdProductIds];
       createdProductIds.length = 0;
-      await ProductPricingModel.deleteMany({ productId: { $in: prodIds } });
-      await mongoose.connection.collection('price_history').deleteMany({ productId: { $in: prodIds } });
-      await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
-      await SkuRegistryModel.deleteMany({ productId: { $in: prodIds } });
       await ProductModel.deleteMany({ _id: { $in: prodIds } });
     }
 
@@ -168,7 +200,10 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     );
-    if (role1) createdRoleIds.push(role1._id);
+    if (role1) {
+      createdRoleIds.push(role1._id);
+      registerTestFixture('Role', role1._id);
+    }
 
     catalogWriterUser = (await UserModel.findOneAndUpdate(
       { phone: '+919444000001' },
@@ -180,7 +215,10 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
-    if (catalogWriterUser) createdUserIds.push(catalogWriterUser._id);
+    if (catalogWriterUser) {
+      createdUserIds.push(catalogWriterUser._id);
+      registerTestFixture('User', catalogWriterUser._id);
+    }
     catalogWriterToken = tokenService.signAccessToken(catalogWriterUser);
 
     // 2. Catalog Publisher Role (CATALOG_READ, CATALOG_WRITE, CATALOG_PUBLISH)
@@ -199,7 +237,10 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     );
-    if (role2) createdRoleIds.push(role2._id);
+    if (role2) {
+      createdRoleIds.push(role2._id);
+      registerTestFixture('Role', role2._id);
+    }
 
     catalogPublisherUser = (await UserModel.findOneAndUpdate(
       { phone: '+919444000002' },
@@ -211,7 +252,10 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
-    if (catalogPublisherUser) createdUserIds.push(catalogPublisherUser._id);
+    if (catalogPublisherUser) {
+      createdUserIds.push(catalogPublisherUser._id);
+      registerTestFixture('User', catalogPublisherUser._id);
+    }
     catalogPublisherToken = tokenService.signAccessToken(catalogPublisherUser);
 
     // 3. Catalog Read-Only Role (CATALOG_READ)
@@ -226,7 +270,10 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     );
-    if (role3) createdRoleIds.push(role3._id);
+    if (role3) {
+      createdRoleIds.push(role3._id);
+      registerTestFixture('Role', role3._id);
+    }
 
     catalogReadOnlyUser = (await UserModel.findOneAndUpdate(
       { phone: '+919444000003' },
@@ -238,7 +285,10 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
-    if (catalogReadOnlyUser) createdUserIds.push(catalogReadOnlyUser._id);
+    if (catalogReadOnlyUser) {
+      createdUserIds.push(catalogReadOnlyUser._id);
+      registerTestFixture('User', catalogReadOnlyUser._id);
+    }
     _catalogReadOnlyToken = tokenService.signAccessToken(catalogReadOnlyUser);
 
     // 4. Unauthorized User
@@ -253,7 +303,10 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     );
-    if (role4) createdRoleIds.push(role4._id);
+    if (role4) {
+      createdRoleIds.push(role4._id);
+      registerTestFixture('Role', role4._id);
+    }
 
     unauthorizedUser = (await UserModel.findOneAndUpdate(
       { phone: '+919444000004' },
@@ -265,7 +318,10 @@ describe('Milestone 4 Step 3: Master Product Catalogue, Product Variants, SKU Re
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
-    if (unauthorizedUser) createdUserIds.push(unauthorizedUser._id);
+    if (unauthorizedUser) {
+      createdUserIds.push(unauthorizedUser._id);
+      registerTestFixture('User', unauthorizedUser._id);
+    }
     _unauthorizedToken = tokenService.signAccessToken(unauthorizedUser);
   });
 

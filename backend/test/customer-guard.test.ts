@@ -38,6 +38,10 @@ describe('Stage 0B: Customer Commerce Security Foundation (Customer Principal Gu
   const testPhonePrefix = '+9192222';
   const rolePrefix = 'CG_TEST_';
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdRoleIds: mongoose.Types.ObjectId[] = [];
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -50,8 +54,12 @@ describe('Stage 0B: Customer Commerce Security Foundation (Customer Principal Gu
     productionApp = createApp();
 
     if (isDbConnected) {
-      await UserModel.deleteMany({ phone: { $regex: /^\+9192222/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^CG_TEST_/ } });
+      UserModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdUserIds.push(doc._id);
+      });
+      RoleModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdRoleIds.push(doc._id);
+      });
 
       await RoleModel.create([
         {
@@ -208,8 +216,16 @@ describe('Stage 0B: Customer Commerce Security Foundation (Customer Principal Gu
 
   afterAll(async () => {
     if (isDbConnected) {
-      await UserModel.deleteMany({ phone: { $regex: /^\+9192222/ } });
-      await RoleModel.deleteMany({ code: { $regex: /^CG_TEST_/ } });
+      if (createdUserIds.length > 0) {
+        const uIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await UserModel.deleteMany({ _id: { $in: uIds } });
+      }
+      if (createdRoleIds.length > 0) {
+        const rIds = [...createdRoleIds];
+        createdRoleIds.length = 0;
+        await RoleModel.deleteMany({ _id: { $in: rIds } });
+      }
       await disconnectDatabase();
     }
   });

@@ -137,4 +137,124 @@ describe('Admin temporary email/password authentication UI', () => {
 
     expect(await screen.findByText('Permission required')).toBeInTheDocument();
   });
+
+  it('guides unenrolled admin through mandatory MFA setup with QR, backup codes, and code verification', async () => {
+    vi.spyOn(authApi, 'refresh').mockResolvedValue(null);
+    vi.spyOn(authApi, 'login').mockResolvedValue({
+      mfaRequired: true,
+      mfaEnrolled: false,
+      mfaToken: 'test-setup-mfa-token',
+      message: 'MFA setup required',
+    });
+    vi.spyOn(authApi, 'mfaSetup').mockResolvedValue({
+      secret: 'JBSWY3DPEHPK3PXP',
+      otpauthUri: 'otpauth://totp/TheHomez:admin%40example.test?secret=JBSWY3DPEHPK3PXP',
+      backupCodes: [
+        'code1-11111',
+        'code2-22222',
+        'code3-33333',
+        'code4-44444',
+        'code5-55555',
+        'code6-66666',
+        'code7-77777',
+        'code8-88888',
+        'code9-99999',
+        'code0-00000',
+      ],
+    });
+    vi.spyOn(authApi, 'mfaVerifySetup').mockResolvedValue(staff);
+    vi.spyOn(authApi, 'me').mockResolvedValue(staff);
+
+    render(<TestApp />);
+    fireEvent.change(await screen.findByLabelText('Admin email'), {
+      target: { value: 'admin@example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Admin password'), {
+      target: { value: 'secure-admin-pass-123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    // User should see the MFA setup screen
+    expect(await screen.findByRole('heading', { name: 'Set up MFA' })).toBeInTheDocument();
+    expect(screen.getByText('code1-11111')).toBeInTheDocument();
+    expect(screen.getByText('code0-00000')).toBeInTheDocument();
+    expect(screen.getByText('JBSWY3DPEHPK3PXP')).toBeInTheDocument();
+
+    // User enters 6-digit TOTP code
+    fireEvent.change(screen.getByLabelText('Verification code'), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and activate MFA' }));
+
+    expect(await screen.findByText('Protected home')).toBeInTheDocument();
+    expect(authApi.mfaVerifySetup).toHaveBeenCalledWith('test-setup-mfa-token', '123456');
+  });
+
+  it('prompts enrolled admin for TOTP verification and completes login on valid code', async () => {
+    vi.spyOn(authApi, 'refresh').mockResolvedValue(null);
+    vi.spyOn(authApi, 'login').mockResolvedValue({
+      mfaRequired: true,
+      mfaEnrolled: true,
+      mfaToken: 'test-verify-mfa-token',
+      message: 'TOTP required',
+    });
+    vi.spyOn(authApi, 'mfaVerify').mockResolvedValue(staff);
+    vi.spyOn(authApi, 'me').mockResolvedValue(staff);
+
+    render(<TestApp />);
+    fireEvent.change(await screen.findByLabelText('Admin email'), {
+      target: { value: 'admin@example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Admin password'), {
+      target: { value: 'secure-admin-pass-123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    // User should see the Two-step verification screen
+    expect(await screen.findByRole('heading', { name: 'Two-step verification' })).toBeInTheDocument();
+
+    // User enters 6-digit TOTP code
+    fireEvent.change(screen.getByLabelText('TOTP code'), {
+      target: { value: '654321' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+
+    expect(await screen.findByText('Protected home')).toBeInTheDocument();
+    expect(authApi.mfaVerify).toHaveBeenCalledWith('test-verify-mfa-token', '654321');
+  });
+
+  it('allows enrolled admin to authenticate via backup code recovery flow', async () => {
+    vi.spyOn(authApi, 'refresh').mockResolvedValue(null);
+    vi.spyOn(authApi, 'login').mockResolvedValue({
+      mfaRequired: true,
+      mfaEnrolled: true,
+      mfaToken: 'test-backup-mfa-token',
+      message: 'TOTP required',
+    });
+    vi.spyOn(authApi, 'mfaVerifyBackup').mockResolvedValue(staff);
+    vi.spyOn(authApi, 'me').mockResolvedValue(staff);
+
+    render(<TestApp />);
+    fireEvent.change(await screen.findByLabelText('Admin email'), {
+      target: { value: 'admin@example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Admin password'), {
+      target: { value: 'secure-admin-pass-123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(await screen.findByRole('heading', { name: 'Two-step verification' })).toBeInTheDocument();
+
+    // Toggle to backup code
+    fireEvent.click(screen.getByRole('button', { name: 'Lost access? Use a backup code' }));
+
+    // Enter backup code
+    fireEvent.change(await screen.findByLabelText('Admin backup code'), {
+      target: { value: 'code1-11111' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify backup code' }));
+
+    expect(await screen.findByText('Protected home')).toBeInTheDocument();
+    expect(authApi.mfaVerifyBackup).toHaveBeenCalledWith('test-backup-mfa-token', 'code1-11111');
+  });
 });

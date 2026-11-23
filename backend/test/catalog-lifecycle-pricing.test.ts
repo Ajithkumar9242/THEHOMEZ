@@ -14,6 +14,7 @@ import { RoleModel } from '../src/models/role.model.js';
 import { ServiceAreaModel } from '../src/models/service-area.model.js';
 import { TokenService } from '../src/services/token/token.service.js';
 import { seedApprovedUnits } from '../src/seeds/units.seed.js';
+import { registerTestFixture } from '../src/database/test-guard.js';
 import { UserType, UserStatus, PermissionCode } from '@thehomez/shared-types';
 import type { Application } from 'express';
 
@@ -38,6 +39,8 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
 
   // Tracked In-Memory Document IDs for Current-Run Positive Ownership
   const createdProductIds: mongoose.Types.ObjectId[] = [];
+  const createdVariantIds: mongoose.Types.ObjectId[] = [];
+  const createdPricingIds: mongoose.Types.ObjectId[] = [];
   const createdCategoryIds: mongoose.Types.ObjectId[] = [];
   const createdServiceAreaIds: mongoose.Types.ObjectId[] = [];
   const createdRoleIds: mongoose.Types.ObjectId[] = [];
@@ -54,6 +57,32 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
     tokenService = new TokenService();
     app = createApp();
 
+    ProductModel.schema.post('save', (doc: any) => {
+      if (doc?._id && !createdProductIds.some((id) => id.equals(doc._id))) {
+        createdProductIds.push(doc._id);
+      }
+    });
+    ProductVariantModel.schema.post('save', (doc: any) => {
+      if (doc?._id && !createdVariantIds.some((id) => id.equals(doc._id))) {
+        createdVariantIds.push(doc._id);
+      }
+    });
+    ProductPricingModel.schema.post('save', (doc: any) => {
+      if (doc?._id && !createdPricingIds.some((id) => id.equals(doc._id))) {
+        createdPricingIds.push(doc._id);
+      }
+    });
+    CategoryModel.schema.post('save', (doc: any) => {
+      if (doc?._id && !createdCategoryIds.some((id) => id.equals(doc._id))) {
+        createdCategoryIds.push(doc._id);
+      }
+    });
+    ServiceAreaModel.schema.post('save', (doc: any) => {
+      if (doc?._id && !createdServiceAreaIds.some((id) => id.equals(doc._id))) {
+        createdServiceAreaIds.push(doc._id);
+      }
+    });
+
     if (isDbConnected) {
       await seedApprovedUnits();
     }
@@ -69,13 +98,21 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
   async function cleanDatabase() {
     if (!isDbConnected) return;
 
-    // 1. Cascade delete pricings, price histories, variants, and products ONLY for tracked test products
+    if (createdPricingIds.length > 0) {
+      const ids = [...createdPricingIds];
+      createdPricingIds.length = 0;
+      await ProductPricingModel.deleteMany({ _id: { $in: ids } });
+    }
+
+    if (createdVariantIds.length > 0) {
+      const ids = [...createdVariantIds];
+      createdVariantIds.length = 0;
+      await ProductVariantModel.deleteMany({ _id: { $in: ids } });
+    }
+
     if (createdProductIds.length > 0) {
       const prodIds = [...createdProductIds];
       createdProductIds.length = 0;
-      await ProductPricingModel.deleteMany({ productId: { $in: prodIds } });
-      await mongoose.connection.collection('price_history').deleteMany({ productId: { $in: prodIds } });
-      await ProductVariantModel.deleteMany({ productId: { $in: prodIds } });
       await ProductModel.deleteMany({ _id: { $in: prodIds } });
     }
 
@@ -163,7 +200,10 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
       },
       { upsert: true, new: true },
     );
-    if (role1) createdRoleIds.push(role1._id);
+    if (role1) {
+      createdRoleIds.push(role1._id);
+      registerTestFixture('Role', role1._id);
+    }
 
     const role2 = await RoleModel.findOneAndUpdate(
       { code: 'LIFECYCLE_TEST_PUBLISHER' },
@@ -182,7 +222,10 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
       },
       { upsert: true, new: true },
     );
-    if (role2) createdRoleIds.push(role2._id);
+    if (role2) {
+      createdRoleIds.push(role2._id);
+      registerTestFixture('Role', role2._id);
+    }
 
     catalogWriterUser = (await UserModel.findOneAndUpdate(
       { phone: '+919666000001' },
@@ -194,7 +237,10 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
-    if (catalogWriterUser) createdUserIds.push(catalogWriterUser._id);
+    if (catalogWriterUser) {
+      createdUserIds.push(catalogWriterUser._id);
+      registerTestFixture('User', catalogWriterUser._id);
+    }
 
     catalogPublisherUser = (await UserModel.findOneAndUpdate(
       { phone: '+919666000002' },
@@ -206,7 +252,10 @@ describe('Milestone 4 Step 5.7: Catalogue Lifecycle Integration & Pricing Govern
       },
       { upsert: true, new: true },
     )) as InstanceType<typeof UserModel>;
-    if (catalogPublisherUser) createdUserIds.push(catalogPublisherUser._id);
+    if (catalogPublisherUser) {
+      createdUserIds.push(catalogPublisherUser._id);
+      registerTestFixture('User', catalogPublisherUser._id);
+    }
 
     catalogWriterToken = tokenService.signAccessToken(catalogWriterUser);
     catalogPublisherToken = tokenService.signAccessToken(catalogPublisherUser);

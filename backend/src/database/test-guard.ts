@@ -206,45 +206,122 @@ export function verifyConnectedDatabaseDiagnostics(
   console.info(`[test-database-guard] Verified isolated test database connected: ${diagnostics.name}`);
 }
 
-/**
- * Known foreign keys and positive ownership identifier fields.
- */
-const KNOWN_OWNERSHIP_ID_FIELDS = new Set([
-  '_id',
-  'productId',
-  'variantId',
-  'partnerId',
-  'userId',
-  'targetUserId',
-  'applicantId',
-  'partnerProductId',
-  'orderId',
-  'parentOrderId',
-  'cartId',
-  'serviceAreaId',
-  'categoryId',
-  'addressId',
-  'sessionId',
+export const IMMUTABLE_COLLECTIONS: ReadonlySet<string> = new Set([
+  'pricehistory',
+  'partneravailabilityhistory',
+  'partnerauditlog',
 ]);
 
-const KNOWN_OWNERSHIP_TOKEN_FIELDS = new Set([
-  'code',
-  'slug',
-  'sku',
-  'phone',
-  'tokenHash',
-  'token',
-  'applicantPhone',
-]);
+/**
+ * Normalizes a model or collection name deterministically.
+ * Strips collection wrappers, 'model' suffix, punctuation, and plural endings.
+ */
+export function normalizeTarget(target: string): string {
+  let norm = (target || '').toLowerCase().trim();
+  norm = norm.replace(/^collection\((.+)\)$/, '$1');
+  norm = norm.replace(/model$/, '');
+  norm = norm.replace(/[._\-]/g, '');
+  if (norm.endsWith('ies')) {
+    norm = norm.slice(0, -3) + 'y';
+  } else if (norm.endsWith('ses')) {
+    norm = norm.slice(0, -2);
+  } else if (norm.endsWith('s') && !norm.endsWith('ss')) {
+    norm = norm.slice(0, -1);
+  }
+  return norm;
+}
+
+/**
+ * In-Memory Fixture Ownership Registry
+ *
+ * Tracks every document ID created and saved during the current test execution process.
+ * Deletion operations MUST prove positive ownership by demonstrating that all targeted IDs
+ * were registered upon creation by the current process under the exact target collection/model.
+ */
+export class TestFixtureRegistry {
+  private static instance: TestFixtureRegistry;
+  private registry = new Map<string, Set<string>>();
+
+  public static getInstance(): TestFixtureRegistry {
+    if (!TestFixtureRegistry.instance) {
+      TestFixtureRegistry.instance = new TestFixtureRegistry();
+    }
+    return TestFixtureRegistry.instance;
+  }
+
+  public registerCreatedFixture(target: string, id: any): void {
+    if (!id) return;
+    const rawId = (id && typeof id === 'object' && '_id' in id) ? (id as any)._id : id;
+    if (!rawId) return;
+    const strId = typeof rawId === 'object' ? rawId.toString() : String(rawId);
+    if (!strId || strId === 'undefined' || strId === 'null') return;
+
+    const norm = normalizeTarget(target);
+    let set = this.registry.get(norm);
+    if (!set) {
+      set = new Set();
+      this.registry.set(norm, set);
+    }
+    set.add(strId);
+  }
+
+  public isRegistered(target: string, id: any): boolean {
+    if (!id) return false;
+    const rawId = (id && typeof id === 'object' && '_id' in id) ? (id as any)._id : id;
+    if (!rawId) return false;
+    const strId = typeof rawId === 'object' ? rawId.toString() : String(rawId);
+
+    const norm = normalizeTarget(target);
+    const set = this.registry.get(norm);
+    return Boolean(set && set.has(strId));
+  }
+
+  public validateOwnership(target: string, ids: any[]): void {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new TestDatabaseIsolationError(
+        `Destructive deletion rejected on '${target}': No target IDs provided for ownership validation.`,
+      );
+    }
+    const norm = normalizeTarget(target);
+    for (const id of ids) {
+      if (!this.isRegistered(norm, id)) {
+        throw new TestDatabaseIsolationError(
+          `Destructive deletion rejected on '${target}': Target ID '${id}' is not an explicitly registered fixture created by the current test run for target '${norm}'.`,
+        );
+      }
+    }
+  }
+
+  public clear(): void {
+    this.registry.clear();
+  }
+}
+
+export function registerTestFixture(targetName: string, id: any): void {
+  TestFixtureRegistry.getInstance().registerCreatedFixture(targetName, id);
+}
 
 /**
  * Strictly asserts that a deletion filter in test mode is constrained to explicitly owned test records.
- * Rejects empty filters, pure $exists checks, broad enums, and global platform prefixes.
+ * Rejects empty filters, foreign keys, tokens, codes, phone numbers, broad wipes, and immutable targets.
+ * Deletions MUST explicitly constrain '_id' to IDs registered under the exact target collection/model.
  */
 export function assertSafeDeletionFilter(filter: any, targetName: string): void {
   if (!filter || typeof filter !== 'object') {
     throw new TestDatabaseIsolationError(
       `Destructive broad deletion rejected on '${targetName}': Filter must be a non-empty object specifying explicitly owned test documents.`,
+    );
+  }
+
+  const normTarget = normalizeTarget(targetName);
+  if (IMMUTABLE_COLLECTIONS.has(normTarget)) {
+    const immutabilityCode = normTarget.includes('price')
+      ? 'PRICE_HISTORY_IMMUTABLE'
+      : normTarget.includes('partneravailability')
+        ? 'PARTNER_AVAILABILITY_HISTORY_IMMUTABLE'
+        : 'PARTNER_AUDIT_LOG_IMMUTABLE';
+    throw new TestDatabaseIsolationError(
+      `CRITICAL IMMUTABILITY VIOLATION [${immutabilityCode}]: Deletion rejected on immutable collection/model '${targetName}'. Audit and history records are permanently immutable and must never be deleted.`,
     );
   }
 
@@ -293,88 +370,43 @@ export function assertSafeDeletionFilter(filter: any, targetName: string): void 
     return;
   }
 
-  // Reject pure $exists checks across all specified fields
-  const isPureExists = keys.every((k) => {
-    const val = filter[k];
-    return val && typeof val === 'object' && '$exists' in val && Object.keys(val).length === 1;
-  });
-  if (isPureExists) {
+  // Deletion MUST explicitly constrain '_id'. Foreign keys, codes, tokens, slugs, phone numbers are strictly prohibited.
+  if (!('_id' in filter)) {
     throw new TestDatabaseIsolationError(
-      `Destructive broad deletion rejected on '${targetName}': Filter relies exclusively on existence checks ($exists) instead of explicit document identity. Cleanups must specify explicitly owned documents.`,
+      `Destructive broad deletion rejected on '${targetName}': Deletion filter must explicitly constrain '_id'. Deletions using foreign keys, tokens, codes, phone numbers, or broad queries are strictly prohibited.`,
     );
   }
 
-  // Reject pure negative checks ($ne: null, etc.) across all fields
-  const isPureNegative = keys.every((k) => {
-    const val = filter[k];
-    return val && typeof val === 'object' && '$ne' in val && Object.keys(val).length === 1;
-  });
-  if (isPureNegative) {
-    throw new TestDatabaseIsolationError(
-      `Destructive broad deletion rejected on '${targetName}': Filter relies exclusively on negative checks ($ne) instead of explicit document identity.`,
-    );
-  }
-
-  // Reject unconstrained enum checks (e.g. { pricingScope: { $in: [...] } } or { status: { $in: [...] } })
-  if (keys.length === 1 && (keys[0] === 'pricingScope' || keys[0] === 'status' || keys[0] === 'entityType')) {
-    throw new TestDatabaseIsolationError(
-      `Destructive broad deletion rejected on '${targetName}': Filter relies exclusively on generic enum or type field '${keys[0]}' without document/entity identity.`,
-    );
-  }
-
-  // Inspect regex patterns: must be anchored with ^ and must not match platform-wide data
-  for (const k of keys) {
-    const val = filter[k];
-    let regexStr: string | null = null;
-    if (val instanceof RegExp) {
-      regexStr = val.source;
-    } else if (val && typeof val === 'object' && typeof val.$regex === 'string') {
-      regexStr = val.$regex;
-    } else if (val && typeof val === 'object' && val.$regex instanceof RegExp) {
-      regexStr = val.$regex.source;
-    }
-
-    if (regexStr) {
-      if (!regexStr.startsWith('^')) {
-        throw new TestDatabaseIsolationError(
-          `Destructive broad deletion rejected on '${targetName}': Regex filter on '${k}' must be anchored with '^'.`,
-        );
-      }
-      // Prohibit platform-wide standard prefixes that match production catalog data
-      const platformPrefixes = [
-        /^\^THZ-(?!TEST|UNIT|CT|AVAIL|SVC|PRICE|PNT)/i,
-        /^\^BLR-/i,
-        /^\^\(cement/i,
-        /^\^cement/i,
-        /^\^\(kaveri/i,
-        /^\^kaveri/i,
-      ];
-      for (const forbidden of platformPrefixes) {
-        if (forbidden.test(regexStr)) {
-          throw new TestDatabaseIsolationError(
-            `Destructive broad deletion rejected on '${targetName}': Regex pattern '${regexStr}' on '${k}' matches shared platform data rather than test-owned documents.`,
-          );
-        }
-      }
+  // Extract target IDs and validate runtime fixture ownership
+  const val = filter._id;
+  const targetIds: any[] = [];
+  if (val instanceof mongoose.Types.ObjectId || typeof val === 'string') {
+    targetIds.push(val);
+  } else if (val && typeof val === 'object') {
+    if ('$eq' in val && val.$eq) {
+      targetIds.push(val.$eq);
+    } else if ('$in' in val && Array.isArray(val.$in)) {
+      targetIds.push(...val.$in);
     }
   }
 
-  // Must contain at least one positive ownership constraint
-  const hasOwnershipId = keys.some((k) => KNOWN_OWNERSHIP_ID_FIELDS.has(k));
-  const hasOwnershipToken = keys.some((k) => KNOWN_OWNERSHIP_TOKEN_FIELDS.has(k));
-
-  if (!hasOwnershipId && !hasOwnershipToken) {
+  if (targetIds.length === 0) {
     throw new TestDatabaseIsolationError(
-      `Destructive broad deletion rejected on '${targetName}': Filter keys [${keys.join(
-        ', ',
-      )}] do not contain an approved document identity field (_id, foreign key, or test-scoped token).`,
+      `Destructive deletion rejected on '${targetName}': No valid '_id' values extracted from filter. Cleanups must specify explicit document IDs.`,
     );
   }
+
+  TestFixtureRegistry.getInstance().validateOwnership(normTarget, targetIds);
 }
 
 let hooksRegistered = false;
 let originalCollectionDeleteMany: any = null;
 let originalCollectionDeleteOne: any = null;
+let originalCollectionFindOneAndDelete: any = null;
+let originalCollectionFindOneAndRemove: any = null;
+let originalCollectionBulkWrite: any = null;
+let originalCollectionInsertOne: any = null;
+let originalCollectionInsertMany: any = null;
 let originalCollectionDrop: any = null;
 let originalConnectionDropDatabase: any = null;
 let originalConnectionDropCollection: any = null;
@@ -384,6 +416,41 @@ function attachDeletionSafetyToSchema(schema: Schema): void {
   if ((schema as any).__testSafetyHooksAttached) return;
   (schema as any).__testSafetyHooksAttached = true;
 
+  // 1. Intercept successful document creations via save()
+  schema.post('save', function (doc: any) {
+    if (isTestMode() && doc && doc._id) {
+      const modelName = doc.constructor?.modelName || (this as any)?.constructor?.modelName || '';
+      const collectionName = doc.collection?.name || (this as any)?.collection?.name || '';
+      if (modelName) TestFixtureRegistry.getInstance().registerCreatedFixture(modelName, doc._id);
+      if (collectionName) TestFixtureRegistry.getInstance().registerCreatedFixture(collectionName, doc._id);
+    }
+  });
+
+  // 2. Intercept successful document creations via insertMany()
+  schema.post('insertMany', function (docs: any) {
+    if (isTestMode() && Array.isArray(docs)) {
+      for (const doc of docs) {
+        if (doc && doc._id) {
+          const modelName = doc.constructor?.modelName || (this as any)?.modelName || '';
+          const collectionName = doc.collection?.name || (this as any)?.collection?.name || '';
+          if (modelName) TestFixtureRegistry.getInstance().registerCreatedFixture(modelName, doc._id);
+          if (collectionName) TestFixtureRegistry.getInstance().registerCreatedFixture(collectionName, doc._id);
+        }
+      }
+    }
+  });
+
+  // 3. Intercept document creations/upserts via findOneAndUpdate()
+  schema.post('findOneAndUpdate', function (doc: any) {
+    if (isTestMode() && doc && doc._id) {
+      const modelName = (this as any)?.model?.modelName || '';
+      const collectionName = (this as any)?.model?.collection?.name || '';
+      if (modelName) TestFixtureRegistry.getInstance().registerCreatedFixture(modelName, doc._id);
+      if (collectionName) TestFixtureRegistry.getInstance().registerCreatedFixture(collectionName, doc._id);
+    }
+  });
+
+  // 4. Intercept destructive operations
   const queryOps = ['deleteMany', 'deleteOne', 'findOneAndDelete', 'findOneAndRemove'] as const;
   for (const op of queryOps) {
     (schema as any).pre(op, function (this: any) {
@@ -460,7 +527,66 @@ export function registerTestDeletionSafetyHooks(mongooseInstance: typeof mongoos
       return originalCollectionDeleteOne.apply(this, [filter, ...rest]);
     };
 
-    // 5. Intercept native collection drop
+    // 5. Intercept native MongoDB collection findOneAndDelete
+    originalCollectionFindOneAndDelete = mongooseInstance.mongo.Collection.prototype.findOneAndDelete;
+    mongooseInstance.mongo.Collection.prototype.findOneAndDelete = function (filter: any, ...rest: any[]) {
+      if (isTestMode()) {
+        assertSafeDeletionFilter(filter, `Collection(${this.collectionName}).findOneAndDelete`);
+      }
+      return originalCollectionFindOneAndDelete.apply(this, [filter, ...rest]);
+    };
+
+    // 6. Intercept native MongoDB collection findOneAndRemove (if present on driver prototype)
+    const collectionProto = mongooseInstance.mongo.Collection.prototype as any;
+    if (typeof collectionProto.findOneAndRemove === 'function') {
+      originalCollectionFindOneAndRemove = collectionProto.findOneAndRemove;
+      collectionProto.findOneAndRemove = function (filter: any, ...rest: any[]) {
+        if (isTestMode()) {
+          assertSafeDeletionFilter(filter, `Collection(${this.collectionName}).findOneAndRemove`);
+        }
+        return originalCollectionFindOneAndRemove.apply(this, [filter, ...rest]);
+      };
+    }
+
+    // 7. Intercept native MongoDB collection bulkWrite
+    originalCollectionBulkWrite = mongooseInstance.mongo.Collection.prototype.bulkWrite;
+    mongooseInstance.mongo.Collection.prototype.bulkWrite = function (ops: any[], ...rest: any[]) {
+      if (isTestMode() && Array.isArray(ops)) {
+        for (const op of ops) {
+          if (op && op.deleteMany) {
+            assertSafeDeletionFilter(op.deleteMany.filter, `Collection(${this.collectionName}).bulkWrite(deleteMany)`);
+          }
+          if (op && op.deleteOne) {
+            assertSafeDeletionFilter(op.deleteOne.filter, `Collection(${this.collectionName}).bulkWrite(deleteOne)`);
+          }
+        }
+      }
+      return originalCollectionBulkWrite.apply(this, [ops, ...rest]);
+    };
+
+    // 8. Intercept native MongoDB collection insertOne to register created fixtures
+    originalCollectionInsertOne = mongooseInstance.mongo.Collection.prototype.insertOne;
+    mongooseInstance.mongo.Collection.prototype.insertOne = async function (doc: any, ...rest: any[]) {
+      const res = await originalCollectionInsertOne.apply(this, [doc, ...rest]);
+      if (isTestMode() && res && res.insertedId) {
+        TestFixtureRegistry.getInstance().registerCreatedFixture(this.collectionName, res.insertedId);
+      }
+      return res;
+    };
+
+    // 9. Intercept native MongoDB collection insertMany to register created fixtures
+    originalCollectionInsertMany = mongooseInstance.mongo.Collection.prototype.insertMany;
+    mongooseInstance.mongo.Collection.prototype.insertMany = async function (docs: any[], ...rest: any[]) {
+      const res = await originalCollectionInsertMany.apply(this, [docs, ...rest]);
+      if (isTestMode() && res && res.insertedIds) {
+        for (const id of Object.values(res.insertedIds)) {
+          TestFixtureRegistry.getInstance().registerCreatedFixture(this.collectionName, id);
+        }
+      }
+      return res;
+    };
+
+    // 10. Intercept native collection drop
     originalCollectionDrop = mongooseInstance.mongo.Collection.prototype.drop;
     mongooseInstance.mongo.Collection.prototype.drop = function (...args: any[]) {
       if (isTestMode()) {
@@ -472,7 +598,7 @@ export function registerTestDeletionSafetyHooks(mongooseInstance: typeof mongoos
     };
   }
 
-  // 6. Intercept Connection.prototype.dropDatabase
+  // 11. Intercept Connection.prototype.dropDatabase
   if (mongooseInstance.Connection?.prototype) {
     originalConnectionDropDatabase = mongooseInstance.Connection.prototype.dropDatabase;
     mongooseInstance.Connection.prototype.dropDatabase = function (...args: any[]) {
@@ -484,7 +610,7 @@ export function registerTestDeletionSafetyHooks(mongooseInstance: typeof mongoos
       return originalConnectionDropDatabase.apply(this, args);
     };
 
-    // 7. Intercept Connection.prototype.dropCollection
+    // 12. Intercept Connection.prototype.dropCollection
     originalConnectionDropCollection = mongooseInstance.Connection.prototype.dropCollection;
     mongooseInstance.Connection.prototype.dropCollection = function (name: string, ...args: any[]) {
       if (isTestMode()) {
@@ -510,6 +636,26 @@ export function restoreTestDeletionSafetyHooks(mongooseInstance: typeof mongoose
   if (originalCollectionDeleteOne && mongooseInstance.mongo?.Collection?.prototype) {
     mongooseInstance.mongo.Collection.prototype.deleteOne = originalCollectionDeleteOne;
     originalCollectionDeleteOne = null;
+  }
+  if (originalCollectionFindOneAndDelete && mongooseInstance.mongo?.Collection?.prototype) {
+    mongooseInstance.mongo.Collection.prototype.findOneAndDelete = originalCollectionFindOneAndDelete;
+    originalCollectionFindOneAndDelete = null;
+  }
+  if (originalCollectionFindOneAndRemove && mongooseInstance.mongo?.Collection?.prototype) {
+    (mongooseInstance.mongo.Collection.prototype as any).findOneAndRemove = originalCollectionFindOneAndRemove;
+    originalCollectionFindOneAndRemove = null;
+  }
+  if (originalCollectionBulkWrite && mongooseInstance.mongo?.Collection?.prototype) {
+    mongooseInstance.mongo.Collection.prototype.bulkWrite = originalCollectionBulkWrite;
+    originalCollectionBulkWrite = null;
+  }
+  if (originalCollectionInsertOne && mongooseInstance.mongo?.Collection?.prototype) {
+    mongooseInstance.mongo.Collection.prototype.insertOne = originalCollectionInsertOne;
+    originalCollectionInsertOne = null;
+  }
+  if (originalCollectionInsertMany && mongooseInstance.mongo?.Collection?.prototype) {
+    mongooseInstance.mongo.Collection.prototype.insertMany = originalCollectionInsertMany;
+    originalCollectionInsertMany = null;
   }
   if (originalCollectionDrop && mongooseInstance.mongo?.Collection?.prototype) {
     mongooseInstance.mongo.Collection.prototype.drop = originalCollectionDrop;
@@ -552,6 +698,7 @@ export class TestFixtureTracker {
       this.trackedIds.set(entityName, set);
     }
     set.add(strId);
+    TestFixtureRegistry.getInstance().registerCreatedFixture(entityName, rawId);
   }
 
   public getIds(entityName: string): mongoose.Types.ObjectId[] {

@@ -1,11 +1,25 @@
 import mongoose, { Schema, type Document, type Model } from 'mongoose';
 import { UserType, UserStatus } from '@thehomez/shared-types';
 
+export interface IUserBackupCode {
+  codeHash: string;
+  usedAt?: Date;
+}
+
 export interface IUserDocument extends Document {
   phone: string;
   userType: UserType;
   email?: string;
   passwordHash?: string;
+  mfaEnabled?: boolean;
+  mfaSecret?: string;
+  mfaPendingSecret?: string;
+  mfaPendingCreatedAt?: Date;
+  mfaLastTotpCounter?: number;
+  mfaCurrentChallengeId?: string;
+  mfaFailedAttempts?: number;
+  mfaLockedUntil?: Date | null;
+  mfaBackupCodes?: IUserBackupCode[];
   status: UserStatus;
   roles: string[];
   partnerId?: mongoose.Types.ObjectId;
@@ -42,6 +56,56 @@ const userSchema = new Schema<IUserDocument>(
     },
     passwordHash: {
       type: String,
+      select: false,
+      default: undefined,
+    },
+    mfaEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    mfaSecret: {
+      type: String,
+      select: false,
+      default: undefined,
+    },
+    mfaPendingSecret: {
+      type: String,
+      select: false,
+      default: undefined,
+    },
+    mfaPendingCreatedAt: {
+      type: Date,
+      select: false,
+      default: undefined,
+    },
+    mfaLastTotpCounter: {
+      type: Number,
+      select: false,
+      default: undefined,
+    },
+    mfaCurrentChallengeId: {
+      type: String,
+      select: false,
+      default: undefined,
+    },
+    mfaFailedAttempts: {
+      type: Number,
+      select: false,
+      default: 0,
+      min: 0,
+    },
+    mfaLockedUntil: {
+      type: Date,
+      select: false,
+      default: null,
+    },
+    mfaBackupCodes: {
+      type: [
+        {
+          codeHash: { type: String, required: true },
+          usedAt: { type: Date, default: undefined },
+        },
+      ],
       select: false,
       default: undefined,
     },

@@ -27,6 +27,14 @@ export interface IAccessTokenPayload extends JwtPayload {
   customerId?: string;
 }
 
+export interface IMfaTokenPayload extends JwtPayload {
+  sub: string;
+  userType: UserType;
+  purpose: 'mfa_setup' | 'mfa_verify';
+  type: 'admin_mfa_challenge';
+  jti?: string;
+}
+
 /**
  * Parses duration strings like '15m', '7d', '1h', '300s' into seconds.
  */
@@ -92,7 +100,11 @@ export class TokenService {
         algorithms: ['HS256'],
       }) as IAccessTokenPayload;
 
-      if (!decoded.sub || !decoded.userType) {
+      if (
+        !decoded.sub ||
+        !decoded.userType ||
+        (decoded as Record<string, unknown>).type === 'admin_mfa_challenge'
+      ) {
         throw new TokenError('Invalid access token payload claims', 'INVALID_ACCESS_TOKEN', 401);
       }
 
@@ -105,6 +117,71 @@ export class TokenService {
         throw err;
       }
       throw new TokenError('Invalid or corrupted access token', 'INVALID_ACCESS_TOKEN', 401);
+    }
+  }
+
+  /**
+   * Signs a short-lived intermediate JWT MFA challenge token.
+   * Valid for 10 minutes. Only usable on Admin MFA endpoints.
+   */
+  public signMfaToken(
+    user: IUserDocument,
+    purpose: 'mfa_setup' | 'mfa_verify',
+    challengeId?: string,
+  ): string {
+    const config = getConfig();
+    const jti = challengeId || crypto.randomUUID();
+    const payload: IMfaTokenPayload = {
+      sub: user._id.toString(),
+      userType: user.userType,
+      purpose,
+      type: 'admin_mfa_challenge',
+      jti,
+    };
+    return jwt.sign(payload, config.auth.jwt.accessSecret, {
+      expiresIn: '10m',
+      algorithm: 'HS256',
+    });
+  }
+
+  /**
+   * Verifies and decodes an intermediate JWT MFA challenge token.
+   */
+  public verifyMfaToken(
+    token: string,
+    expectedPurpose?: 'mfa_setup' | 'mfa_verify',
+  ): IMfaTokenPayload {
+    const config = getConfig();
+    try {
+      const decoded = jwt.verify(token, config.auth.jwt.accessSecret, {
+        algorithms: ['HS256'],
+      }) as IMfaTokenPayload;
+
+      if (!decoded.sub || decoded.type !== 'admin_mfa_challenge') {
+        throw new TokenError('Invalid MFA token payload', 'INVALID_MFA_TOKEN', 401);
+      }
+
+      if (expectedPurpose && decoded.purpose !== expectedPurpose) {
+        throw new TokenError(
+          `MFA token purpose mismatch. Expected ${expectedPurpose}`,
+          'INVALID_MFA_TOKEN',
+          401,
+        );
+      }
+
+      return decoded;
+    } catch (err: unknown) {
+      if (err instanceof jwt.TokenExpiredError) {
+        throw new TokenError(
+          'MFA session token has expired. Please sign in again.',
+          'MFA_TOKEN_EXPIRED',
+          401,
+        );
+      }
+      if (err instanceof TokenError) {
+        throw err;
+      }
+      throw new TokenError('Invalid or corrupted MFA session token', 'INVALID_MFA_TOKEN', 401);
     }
   }
 

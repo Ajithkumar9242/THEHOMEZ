@@ -288,7 +288,6 @@ describe('Stage C-8B.1: Admin Partner Management Security, Transaction & Regress
       if (createdPartnerIds.length > 0) {
         const partnerIds = [...createdPartnerIds];
         createdPartnerIds.length = 0;
-        await PartnerAuditLogModel.deleteMany({ partnerId: { $in: partnerIds } });
         await PartnerModel.deleteMany({ _id: { $in: partnerIds } });
       }
 
@@ -301,7 +300,6 @@ describe('Stage C-8B.1: Admin Partner Management Security, Transaction & Regress
       if (createdUserIds.length > 0) {
         const userIds = [...createdUserIds];
         createdUserIds.length = 0;
-        await RefreshTokenModel.deleteMany({ userId: { $in: userIds } });
         await UserModel.deleteMany({ _id: { $in: userIds } });
       }
 

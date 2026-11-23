@@ -12,6 +12,11 @@ describe('OtpService — Authentication Challenge Lifecycle', () => {
   let isDbConnected = false;
   let otpService: OtpService;
 
+  // Tracked In-Memory Document IDs for Current-Run Positive Ownership
+  const createdUserIds: mongoose.Types.ObjectId[] = [];
+  const createdOtpIds: mongoose.Types.ObjectId[] = [];
+  const createdLockoutIds: mongoose.Types.ObjectId[] = [];
+
   beforeAll(async () => {
     try {
       await connectDatabase();
@@ -21,9 +26,15 @@ describe('OtpService — Authentication Challenge Lifecycle', () => {
     }
 
     if (isDbConnected) {
-      await UserModel.deleteMany({ phone: { $regex: /^\+919999/ } });
-      await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+919999/ } });
-      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+919999/ } });
+      UserModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdUserIds.push(doc._id);
+      });
+      PhoneOtpModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdOtpIds.push(doc._id);
+      });
+      OtpLockoutModel.schema.post('save', function (doc: any) {
+        if (doc && doc._id) createdLockoutIds.push(doc._id);
+      });
     }
 
     otpService = new OtpService(new MockOtpProvider());
@@ -35,9 +46,21 @@ describe('OtpService — Authentication Challenge Lifecycle', () => {
 
   afterAll(async () => {
     if (isDbConnected) {
-      await UserModel.deleteMany({ phone: { $regex: /^\+919999/ } });
-      await PhoneOtpModel.deleteMany({ phone: { $regex: /^\+919999/ } });
-      await OtpLockoutModel.deleteMany({ phone: { $regex: /^\+919999/ } });
+      if (createdOtpIds.length > 0) {
+        const oIds = [...createdOtpIds];
+        createdOtpIds.length = 0;
+        await PhoneOtpModel.deleteMany({ _id: { $in: oIds } });
+      }
+      if (createdLockoutIds.length > 0) {
+        const lIds = [...createdLockoutIds];
+        createdLockoutIds.length = 0;
+        await OtpLockoutModel.deleteMany({ _id: { $in: lIds } });
+      }
+      if (createdUserIds.length > 0) {
+        const uIds = [...createdUserIds];
+        createdUserIds.length = 0;
+        await UserModel.deleteMany({ _id: { $in: uIds } });
+      }
       await disconnectDatabase();
     }
   });
