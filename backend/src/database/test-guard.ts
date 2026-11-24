@@ -218,7 +218,9 @@ export const IMMUTABLE_COLLECTIONS: ReadonlySet<string> = new Set([
  */
 export function normalizeTarget(target: string): string {
   let norm = (target || '').toLowerCase().trim();
-  norm = norm.replace(/^collection\((.+)\)$/, '$1');
+  norm = norm.replace(/\.(deletemany|deleteone|findoneanddelete|findoneandremove).*$/, '');
+  norm = norm.replace(/\(deletemany\)|\(deleteone\)/g, '');
+  norm = norm.replace(/^collection\((.+?)\).*$/, '$1');
   norm = norm.replace(/model$/, '');
   norm = norm.replace(/[._\-]/g, '');
   if (norm.endsWith('ies')) {
@@ -292,6 +294,22 @@ export class TestFixtureRegistry {
     }
   }
 
+  public getRegisteredIds(target: string): mongoose.Types.ObjectId[] {
+    const norm = normalizeTarget(target);
+    const set = this.registry.get(norm);
+    if (!set || set.size === 0) return [];
+    return Array.from(set).map((id) => new mongoose.Types.ObjectId(id));
+  }
+
+  public unregister(target: string, ids: any[]): void {
+    const norm = normalizeTarget(target);
+    const set = this.registry.get(norm);
+    if (!set) return;
+    for (const id of ids) {
+      set.delete(String(id));
+    }
+  }
+
   public clear(): void {
     this.registry.clear();
   }
@@ -299,6 +317,14 @@ export class TestFixtureRegistry {
 
 export function registerTestFixture(targetName: string, id: any): void {
   TestFixtureRegistry.getInstance().registerCreatedFixture(targetName, id);
+}
+
+export function getRegisteredFixtureIds(targetName: string): mongoose.Types.ObjectId[] {
+  return TestFixtureRegistry.getInstance().getRegisteredIds(targetName);
+}
+
+export function unregisterTestFixtures(targetName: string, ids: any[]): void {
+  TestFixtureRegistry.getInstance().unregister(targetName, ids);
 }
 
 /**

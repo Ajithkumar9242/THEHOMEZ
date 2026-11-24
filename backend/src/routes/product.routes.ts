@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import { PermissionCode } from '@thehomez/shared-types';
-import { authenticate, optionalAuthenticate, authorize } from '../middleware/auth.middleware.js';
+import {
+  authenticate,
+  optionalAuthenticate,
+  authorize,
+  staffOnlyGuard,
+} from '../middleware/auth.middleware.js';
 import { validateBody, validateQuery, validateParams } from '../middleware/validate.middleware.js';
 import { productController } from '../controllers/product.controller.js';
 import { productVariantController } from '../controllers/product-variant.controller.js';
@@ -65,6 +70,7 @@ productRouter.get(
 productRouter.get(
   '/',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_READ),
   validateQuery(adminProductQuerySchema),
   (req, res, next) => productController.listProducts(req, res, next),
@@ -77,6 +83,7 @@ productRouter.get(
 productRouter.post(
   '/',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
   validateBody(createProductSchema),
   (req, res, next) => productController.createProduct(req, res, next),
@@ -89,6 +96,7 @@ productRouter.post(
 productRouter.post(
   '/:id/publish',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_PUBLISH),
   validateParams(productIdParamSchema),
   (req, res, next) => productController.publishProduct(req, res, next),
@@ -101,6 +109,7 @@ productRouter.post(
 productRouter.post(
   '/:id/deactivate',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
   validateParams(productIdParamSchema),
   (req, res, next) => productController.deactivateProduct(req, res, next),
@@ -113,6 +122,7 @@ productRouter.post(
 productRouter.post(
   '/:id/archive',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
   validateParams(productIdParamSchema),
   (req, res, next) => productController.archiveProduct(req, res, next),
@@ -125,6 +135,7 @@ productRouter.post(
 productRouter.delete(
   '/:id',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
   validateParams(productIdParamSchema),
   (req, res, next) => productController.deleteDraftProduct(req, res, next),
@@ -137,6 +148,7 @@ productRouter.delete(
 productRouter.get(
   '/:id',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_READ),
   validateParams(productIdParamSchema),
   (req, res, next) => productController.getProductById(req, res, next),
@@ -149,6 +161,7 @@ productRouter.get(
 productRouter.patch(
   '/:id',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
   validateParams(productIdParamSchema),
   validateBody(updateProductSchema),
@@ -166,6 +179,7 @@ productRouter.patch(
 productRouter.post(
   '/:productId/variants',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
   validateBody(createProductVariantSchema),
   (req, res, next) => productVariantController.createVariant(req, res, next),
@@ -178,6 +192,7 @@ productRouter.post(
 productRouter.get(
   '/:productId/variants',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_READ),
   (req, res, next) => productVariantController.listVariants(req, res, next),
 );
@@ -189,6 +204,7 @@ productRouter.get(
 productRouter.get(
   '/:productId/variants/:variantId',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_READ),
   validateParams(variantParamSchema),
   (req, res, next) => productVariantController.getVariantById(req, res, next),
@@ -201,6 +217,7 @@ productRouter.get(
 productRouter.patch(
   '/:productId/variants/:variantId',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
   validateParams(variantParamSchema),
   validateBody(updateProductVariantSchema),
@@ -214,6 +231,7 @@ productRouter.patch(
 productRouter.post(
   '/:productId/variants/:variantId/deactivate',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
   validateParams(variantParamSchema),
   (req, res, next) => productVariantController.deactivateVariant(req, res, next),
@@ -226,6 +244,7 @@ productRouter.post(
 productRouter.post(
   '/:productId/variants/:variantId/archive',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
   validateParams(variantParamSchema),
   (req, res, next) => productVariantController.archiveVariant(req, res, next),
@@ -242,6 +261,7 @@ productRouter.post(
 productRouter.get(
   '/:id/pricing/history',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.PRICING_READ),
   validateParams(standalonePricingParamSchema),
   validateQuery(getPricingHistoryQuerySchema),
@@ -255,6 +275,7 @@ productRouter.get(
 productRouter.put(
   '/:id/pricing',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.PRICING_WRITE),
   validateParams(standalonePricingParamSchema),
   validateBody(setPricingSchema),
@@ -268,6 +289,7 @@ productRouter.put(
 productRouter.get(
   '/:id/pricing',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.PRICING_READ),
   validateParams(standalonePricingParamSchema),
   validateQuery(getPricingQuerySchema),
@@ -281,6 +303,7 @@ productRouter.get(
 productRouter.put(
   '/:productId/variants/:variantId/pricing',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.PRICING_WRITE),
   validateParams(variantPricingParamSchema),
   validateBody(setPricingSchema),
@@ -294,6 +317,7 @@ productRouter.put(
 productRouter.get(
   '/:productId/variants/:variantId/pricing',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.PRICING_READ),
   validateParams(variantPricingParamSchema),
   validateQuery(getPricingQuerySchema),

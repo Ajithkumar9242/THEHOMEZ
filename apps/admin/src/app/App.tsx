@@ -1,7 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { Alert, Card, Space, Tag, Typography } from 'antd';
 import { AdminLayout } from '../layouts/AdminLayout.js';
-import { AuthProvider, SignInPage, useAuth } from '../providers/AuthProvider.js';
+import { AuthProvider, SignInPage } from '../providers/AuthProvider.js';
 import { ProtectedRoute } from '../routes/ProtectedRoute.js';
 import { PermissionCode } from '@thehomez/shared-types';
 import { Outlet } from 'react-router-dom';
@@ -25,55 +24,13 @@ import { PartnerDirectoryPage } from '../features/partners/pages/PartnerDirector
 import { PartnerDetailPage } from '../features/partners/pages/PartnerDetailPage.js';
 import { PartnerApplicationDirectoryPage } from '../features/partner-applications/pages/PartnerApplicationDirectoryPage.js';
 import { PartnerApplicationDetailPage } from '../features/partner-applications/pages/PartnerApplicationDetailPage.js';
+import { DashboardOverviewPage } from '../features/dashboard/pages/DashboardOverviewPage.js';
 
 function CategoryLayout() {
   return (
     <AdminLayout>
       <Outlet />
     </AdminLayout>
-  );
-}
-
-function StatusPage() {
-  const { user } = useAuth();
-  return (
-    <Space direction="vertical" size="large" className="status-page">
-      <div>
-        <Typography.Text className="eyebrow">ADMIN WORKSPACE</Typography.Text>
-        <Typography.Title level={1}>Administration foundation</Typography.Title>
-        <Typography.Paragraph className="intro-copy">
-          TheHomez Admin is being prepared for operational workflows. This workspace currently
-          provides a staff-only shell; no operational modules or metrics are active.
-        </Typography.Paragraph>
-      </div>
-      <Alert
-        type="info"
-        showIcon
-        message="No operational data is displayed"
-        description="Dashboard figures and module workflows will appear only after their APIs and requirements are implemented and verified."
-      />
-      <Card title="Current access" variant="borderless">
-        <Space direction="vertical" size="small">
-          <Typography.Text>Authenticated identity is confirmed by the backend.</Typography.Text>
-          <Typography.Text type="secondary">{user?.email || user?.phone}</Typography.Text>
-          <Tag color="blue">
-            {user?.userType} · {user?.status}
-          </Tag>
-        </Space>
-      </Card>
-      <Card title="Modules" variant="borderless">
-        <Typography.Paragraph type="secondary">
-          Navigation is visible for planning, while unfinished areas remain unavailable. The
-          read-only Category Browser is planned for the next implementation phase.
-        </Typography.Paragraph>
-      </Card>
-      <Alert
-        type="success"
-        showIcon
-        message="Admin Authentication & MFA Foundation active"
-        description="Mandatory RFC 6238 TOTP Multi-Factor Authentication and single-use backup code recovery are configured and active for staff administrator accounts."
-      />
-    </Space>
   );
 }
 
@@ -86,7 +43,7 @@ function ShellRoutes() {
           path="/"
           element={
             <AdminLayout>
-              <StatusPage />
+              <DashboardOverviewPage />
             </AdminLayout>
           }
         />
@@ -143,7 +100,7 @@ function ShellRoutes() {
           />
         </Route>
       </Route>
-      <Route element={<ProtectedRoute />}>
+      <Route element={<ProtectedRoute permission={PermissionCode.CATALOG_READ} />}>
         <Route element={<CategoryLayout />}>
           <Route path="/catalogue/units" element={<UnitListPage />} />
           <Route path="/catalogue/units/:code" element={<UnitDetailPage />} />

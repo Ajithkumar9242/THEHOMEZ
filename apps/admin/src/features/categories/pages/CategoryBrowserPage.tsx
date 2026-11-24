@@ -7,6 +7,7 @@ import {
   Empty,
   Input,
   Result,
+  Segmented,
   Skeleton,
   Space,
   Typography,
@@ -15,6 +16,7 @@ import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type {
   ICategory,
+  ICategoryDetailsResponse,
   ICategorySubcategoryItem,
   ICategoryTreeItem,
 } from '@thehomez/shared-types';
@@ -23,6 +25,7 @@ import { ApiError } from '../../../services/api-client.js';
 import { useAuth } from '../../../providers/AuthProvider.js';
 import { categoryClient } from '../api/category-client.js';
 import { CategoryTree } from '../components/CategoryTree.js';
+import { CategoryDetails } from '../components/CategoryDetails.js';
 import { CategoryFormModal } from '../components/CategoryFormModal.js';
 import { CategoryDeleteModal } from '../components/CategoryDeleteModal.js';
 
@@ -139,7 +142,7 @@ export function CategoryBrowserPage() {
     setFormModalOpen(true);
   };
 
-  const handleOpenEdit = (cat: ICategoryTreeItem | ICategorySubcategoryItem) => {
+  const handleOpenEdit = (cat: ICategory | ICategoryTreeItem | ICategorySubcategoryItem) => {
     const root = categories.find((r) => r.id === cat.id);
     const kidsExist = Boolean(root && root.subcategories && root.subcategories.length > 0);
     setSelectedCategory(cat);
@@ -149,10 +152,102 @@ export function CategoryBrowserPage() {
     setFormModalOpen(true);
   };
 
-  const handleOpenDelete = (cat: ICategoryTreeItem | ICategorySubcategoryItem) => {
+  const handleOpenDelete = (cat: ICategory | ICategoryTreeItem | ICategorySubcategoryItem) => {
     setCategoryToDelete({ id: cat.id, name: cat.name });
     setDeleteModalOpen(true);
   };
+
+  const stats = useMemo(() => {
+    let rootCount = 0;
+    let subCount = 0;
+    let activeCount = 0;
+    let inactiveCount = 0;
+
+    for (const root of categories) {
+      rootCount++;
+      if (root.isActive) activeCount++;
+      else inactiveCount++;
+
+      for (const sub of root.subcategories) {
+        subCount++;
+        if (sub.isActive) activeCount++;
+        else inactiveCount++;
+      }
+    }
+
+    return {
+      total: rootCount + subCount,
+      root: rootCount,
+      subcategories: subCount,
+      active: activeCount,
+      inactive: inactiveCount,
+    };
+  }, [categories]);
+
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
+
+  const selectedDetails = useMemo<ICategoryDetailsResponse | null>(() => {
+    if (!selectedDetailId) return null;
+    const item = categoryById.get(selectedDetailId);
+    if (!item) return null;
+
+    if (item.level === 0) {
+      const rootItem = item as ICategoryTreeItem;
+      return {
+        category: {
+          id: rootItem.id,
+          slug: rootItem.slug,
+          name: rootItem.name,
+          description: rootItem.description,
+          parentId: null,
+          level: 0,
+          displayOrder: rootItem.displayOrder,
+          isActive: rootItem.isActive,
+          iconUrl: rootItem.iconUrl,
+          imageUrl: rootItem.imageUrl,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        subcategories: rootItem.subcategories,
+        parent: null,
+      };
+    } else {
+      const subItem = item as ICategorySubcategoryItem;
+      const parentRoot = categories.find((r) => r.id === subItem.parentId);
+      return {
+        category: {
+          id: subItem.id,
+          slug: subItem.slug,
+          name: subItem.name,
+          description: subItem.description,
+          parentId: subItem.parentId,
+          level: 1,
+          displayOrder: subItem.displayOrder,
+          isActive: subItem.isActive,
+          iconUrl: subItem.iconUrl,
+          imageUrl: subItem.imageUrl,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        subcategories: [],
+        parent: parentRoot
+          ? {
+              id: parentRoot.id,
+              slug: parentRoot.slug,
+              name: parentRoot.name,
+              description: parentRoot.description,
+              parentId: null,
+              level: 0,
+              displayOrder: parentRoot.displayOrder,
+              isActive: parentRoot.isActive,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          : null,
+      };
+    }
+  }, [selectedDetailId, categoryById, categories]);
 
   return (
     <div className="category-page">
@@ -185,8 +280,57 @@ export function CategoryBrowserPage() {
               Include inactive
             </Checkbox>
           )}
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => setAttempt((value) => value + 1)}
+            aria-label="Refresh categories"
+          >
+            Refresh
+          </Button>
         </Space>
       </div>
+
+      {!canWrite && canRead && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 20 }}
+          message="Read-Only Catalogue View"
+          description="Your staff account has CATALOG_READ permission. You can explore categories, subcategories, and active statuses. Creating or modifying taxonomy requires CATALOG_WRITE permission."
+        />
+      )}
+
+      {canRead && !permissionDenied && (
+        <div className="category-stats-grid">
+          <div className="category-stat-card">
+            <div className="category-stat-label">Total Categories</div>
+            <div className="category-stat-value">{stats.total}</div>
+          </div>
+          <div className="category-stat-card">
+            <div className="category-stat-label">Root Categories</div>
+            <div className="category-stat-value">{stats.root}</div>
+          </div>
+          <div className="category-stat-card">
+            <div className="category-stat-label">Subcategories</div>
+            <div className="category-stat-value">{stats.subcategories}</div>
+          </div>
+          <div className="category-stat-card">
+            <div className="category-stat-label">Active Records</div>
+            <div className="category-stat-value" style={{ color: '#16a34a' }}>
+              {stats.active}
+            </div>
+          </div>
+          <div className="category-stat-card">
+            <div className="category-stat-label">Inactive Records</div>
+            <div
+              className="category-stat-value"
+              style={{ color: stats.inactive > 0 ? '#ea580c' : '#64748b' }}
+            >
+              {stats.inactive}
+            </div>
+          </div>
+        </div>
+      )}
 
       {permissionDenied ? (
         <Result
@@ -214,6 +358,19 @@ export function CategoryBrowserPage() {
               onChange={(event) => setSearch(event.target.value)}
               aria-label="Search categories"
             />
+            {includeInactive && (
+              <Segmented
+                className="category-filter-segmented"
+                value={statusFilter}
+                onChange={(val) => setStatusFilter(val as 'ALL' | 'ACTIVE' | 'INACTIVE')}
+                options={[
+                  { label: `All (${stats.total})`, value: 'ALL' },
+                  { label: `Active (${stats.active})`, value: 'ACTIVE' },
+                  { label: `Inactive (${stats.inactive})`, value: 'INACTIVE' },
+                ]}
+                block
+              />
+            )}
             <div className="category-tree-content" aria-live="polite" aria-busy={loading}>
               {loading ? (
                 <Skeleton active paragraph={{ rows: 5 }} />
@@ -246,24 +403,42 @@ export function CategoryBrowserPage() {
                 <CategoryTree
                   categories={categories}
                   search={search}
+                  statusFilter={statusFilter}
                   canWrite={canWrite}
                   onAddSubcategory={handleOpenAddSubcategory}
                   onEdit={handleOpenEdit}
                   onDelete={handleOpenDelete}
                   onSelect={(id) => {
-                    const selected = categoryById.get(id);
-                    if (selected)
-                      navigate(
-                        `/catalogue/categories/${encodeURIComponent(selected.slug)}${includeInactive ? '?includeInactive=true' : ''}`,
-                      );
+                    setSelectedDetailId(id);
                   }}
                 />
               )}
             </div>
           </Card>
-          <Card className="category-detail-empty" variant="borderless">
-            <Empty description="Select a category to view its details" />
-          </Card>
+          {selectedDetails ? (
+            <CategoryDetails
+              details={selectedDetails}
+              canWrite={canWrite}
+              onClose={() => setSelectedDetailId(null)}
+              onViewPage={() =>
+                navigate(
+                  `/catalogue/categories/${encodeURIComponent(selectedDetails.category.slug)}${includeInactive ? '?includeInactive=true' : ''}`,
+                )
+              }
+              onEdit={() => handleOpenEdit(selectedDetails.category)}
+              onDelete={() => handleOpenDelete(selectedDetails.category)}
+              onAddSubcategory={() => {
+                const rootItem = categories.find((r) => r.id === selectedDetails.category.id);
+                if (rootItem) handleOpenAddSubcategory(rootItem);
+              }}
+              onEditChild={(child) => handleOpenEdit(child)}
+              onDeleteChild={(child) => handleOpenDelete(child)}
+            />
+          ) : (
+            <Card className="category-detail-empty" variant="borderless">
+              <Empty description="Select a category to view its details" />
+            </Card>
+          )}
         </div>
       )}
 

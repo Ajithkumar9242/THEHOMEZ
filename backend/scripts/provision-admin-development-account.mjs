@@ -12,7 +12,7 @@ import {
 } from './admin-provisioning-guards.mjs';
 
 const expectedDatabase = ADMIN_PROVISIONING_DATABASE;
-const roleCode = 'ADMIN_CATEGORY_READONLY';
+const roleCode = 'SUPER_ADMIN';
 const environmentPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.env.admin');
 const invocationNodeEnv = process.env.NODE_ENV;
 
@@ -89,7 +89,7 @@ try {
   // index writes can occur before the connected database name is verified.
   UserModel.schema.options.autoIndex = false;
   RoleModel.schema.options.autoIndex = false;
-  const { UserStatus, UserType, PermissionCode } = sharedTypes;
+  const { UserStatus, UserType, PermissionCode, SYSTEM_ROLE_SEEDS } = sharedTypes;
   const { normalizePhoneNumber } = await import('../src/services/phone.utils.ts');
   const { hashPassword } = passwordModule;
   loggerModule.logger.level = 'silent';
@@ -129,7 +129,7 @@ try {
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const confirmation = await rl.question(
-    `Provision exactly one active STAFF identity and read-only catalog role in ${expectedDatabase}? Type YES: `,
+    `Provision active development Platform Owner STAFF identity with canonical SUPER_ADMIN role in ${expectedDatabase}? Type YES: `,
   );
   rl.close();
   if (confirmation !== 'YES')
@@ -143,22 +143,35 @@ try {
       .select('_id')
       .session(session)
       .lean();
-    const existingRole = await RoleModel.findOne({ code: roleCode }).session(session).lean();
-    assertProvisioningTargetsAvailable(existingUser, existingRole);
+    if (existingUser) {
+      throw new Error(
+        'An account with this email or phone already exists; existing accounts cannot be recreated or reset.',
+      );
+    }
 
-    const [role] = await RoleModel.create(
-      [
-        {
-          code: roleCode,
-          name: 'Admin Category Read Only',
-          description: 'Development-only catalog read access for Admin verification.',
-          userType: UserType.STAFF,
-          isSystemManaged: false,
-          permissions: [PermissionCode.CATALOG_READ],
-        },
-      ],
-      { session },
-    );
+    const superAdminSeed = SYSTEM_ROLE_SEEDS.SUPER_ADMIN;
+    if (!superAdminSeed || !Array.isArray(superAdminSeed.permissions)) {
+      throw new Error('Canonical SUPER_ADMIN seed definition is invalid or missing.');
+    }
+
+    let role = await RoleModel.findOne({ code: superAdminSeed.code }).session(session);
+    if (!role) {
+      const [createdRole] = await RoleModel.create(
+        [
+          {
+            code: superAdminSeed.code,
+            name: superAdminSeed.name,
+            description: superAdminSeed.description,
+            userType: superAdminSeed.userType,
+            isSystemManaged: superAdminSeed.isSystemManaged,
+            permissions: [...superAdminSeed.permissions],
+          },
+        ],
+        { session },
+      );
+      role = createdRole;
+    }
+
     const [user] = await UserModel.create(
       [
         {
@@ -167,7 +180,7 @@ try {
           passwordHash,
           userType: UserType.STAFF,
           status: UserStatus.ACTIVE,
-          roles: [roleCode],
+          roles: [superAdminSeed.code],
         },
       ],
       { session },
@@ -176,19 +189,20 @@ try {
     if (
       !role ||
       role.userType !== UserType.STAFF ||
-      role.permissions.length !== 1 ||
-      role.permissions[0] !== PermissionCode.CATALOG_READ ||
+      role.permissions.length !== superAdminSeed.permissions.length ||
       !user ||
       user.status !== UserStatus.ACTIVE ||
       user.userType !== UserType.STAFF ||
-      user.roles.length !== 1 ||
-      user.roles[0] !== roleCode
+      !Array.isArray(user.roles) ||
+      !user.roles.includes(superAdminSeed.code)
     ) {
       throw new Error('Provisioned account or role validation failed.');
     }
   });
 
-  console.log('Provisioning completed: one active STAFF identity with only CATALOG_READ.');
+  console.log(
+    'Provisioning completed: active development Platform Owner STAFF identity provisioned with canonical SUPER_ADMIN role.',
+  );
 } catch {
   exitCode = 1;
   console.error('Provisioning failed or was refused; credentials were not printed.');

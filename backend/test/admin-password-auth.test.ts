@@ -143,68 +143,16 @@ class MockRateLimitResponse extends EventEmitter {
 
 afterEach(() => vi.restoreAllMocks());
 
-describe('temporary Admin email/password authentication', () => {
-  it('authenticates active STAFF, resolves permissions, and uses the shared browser session contract', async () => {
+describe('decommissioned Admin email/password fallback', () => {
+  it('permanently rejects password-only admin sign-in with 404 AUTH_UNAVAILABLE and generates zero tokens', async () => {
     const { controller, tokenService } = makeController(makeUser());
     const result = await invokeLogin(controller, { email: 'ADMIN@example.test', password });
-    const body = result.payload as { success: boolean; data: { tokens: object; user: object } };
-
-    expect(result.statusCode).toBe(200);
-    expect(body.success).toBe(true);
-    expect(body.data.user).toMatchObject({ userType: UserType.STAFF, status: UserStatus.ACTIVE });
-    expect(body.data.tokens).toEqual({
-      accessToken: 'test-access-token',
-      expiresIn: 900,
-      tokenType: 'Bearer',
-    });
-    expect(JSON.stringify(result.payload)).not.toContain(password);
-    expect(JSON.stringify(result.payload)).not.toContain(passwordHash);
-    expect(
-      (result.response as unknown as { cookie: ReturnType<typeof vi.fn> }).cookie,
-    ).toHaveBeenCalled();
-    expect(tokenService.generateTokenPair).toHaveBeenCalledOnce();
-  });
-
-  it('returns the same generic response for unknown identities and wrong passwords', async () => {
-    const unknown = makeController(null).controller;
-    const missingUser = await invokeLogin(unknown, { email: 'missing@example.test', password });
-    const wrongPassword = makeController(makeUser()).controller;
-    const wrongSecret = await invokeLogin(wrongPassword, {
-      email: 'admin@example.test',
-      password: 'not-the-development-password',
-    });
-
-    expect(missingUser.statusCode).toBe(401);
-    expect(wrongSecret.statusCode).toBe(401);
-    expect(missingUser.payload).toMatchObject({
-      error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' },
-    });
-    expect(wrongSecret.payload).toMatchObject({
-      error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' },
-    });
-  });
-
-  it('rejects inactive accounts with the same generic authentication failure', async () => {
-    const { controller, tokenService } = makeController(makeUser(UserStatus.SUSPENDED));
-    const result = await invokeLogin(controller, { email: 'admin@example.test', password });
-
-    expect(result.statusCode).toBe(401);
-    expect(result.payload).toMatchObject({ error: { code: 'INVALID_CREDENTIALS' } });
-    expect(tokenService.generateTokenPair).not.toHaveBeenCalled();
-  });
-
-  it('refuses before user lookup when the connected database is not the isolated Admin database', async () => {
-    const findOne = vi.spyOn(UserModel, 'findOne');
-    const { controller } = makeController(null);
-    vi.mocked(database.getDatabaseDiagnostics).mockReturnValue({
-      readyState: 1,
-      status: 'connected',
-      name: 'thehomez',
-    });
-    const result = await invokeLogin(controller, { email: 'admin@example.test', password });
 
     expect(result.statusCode).toBe(404);
-    expect(findOne).not.toHaveBeenCalled();
+    expect(result.payload).toMatchObject({
+      error: { code: 'AUTH_UNAVAILABLE' },
+    });
+    expect(tokenService.generateTokenPair).not.toHaveBeenCalled();
   });
 
   it('resolves only the permissions of the assigned least-privilege role', async () => {
@@ -241,7 +189,7 @@ describe('temporary Admin email/password authentication', () => {
     expect(writeResponse.statusCode).toBe(403);
   });
 
-  it('places the auth rate limiter and CSRF guard before the password login handler', async () => {
+  it('confirms the development password-only fallback route is absent from createAuthRouter', async () => {
     const controller = {
       requestOtp: (_req: Request, res: Response) => res.status(200).json({ success: true }),
       verifyOtp: (_req: Request, res: Response) => res.status(200).json({ success: true }),
@@ -255,29 +203,7 @@ describe('temporary Admin email/password authentication', () => {
     const router = createAuthRouter(controller);
     const loginLayer = router.stack.find((layer) => layer.route?.path === '/admin/password');
 
-    expect(loginLayer).toBeDefined();
-    expect(loginLayer?.route?.stack).toHaveLength(4);
-    expect(loginLayer?.route?.stack[0]?.handle).not.toBe(controller.adminPasswordLogin);
-    expect(loginLayer?.route?.stack[1]?.handle).toBe(csrfProtectionMiddleware);
-    expect(loginLayer?.route?.stack[3]?.handle).toBe(controller.adminPasswordLogin);
-
-    const limiter = createAuthRateLimiter({ limit: 2, windowMs: 60_000, standardHeaders: false });
-    const statuses: number[] = [];
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const req = {
-        ip: '192.0.2.10',
-        socket: { remoteAddress: '192.0.2.10' },
-        headers: {},
-        body: { email: 'admin@example.test' },
-      } as unknown as Request;
-      const res = new MockRateLimitResponse();
-      await new Promise<void>((resolve) => {
-        const next = () => resolve();
-        Promise.resolve(limiter(req, res as unknown as Response, next)).then(resolve);
-      });
-      statuses.push(res.statusCode);
-    }
-    expect(statuses).toEqual([200, 200, 429]);
+    expect(loginLayer).toBeUndefined();
   });
 
   it('preserves the existing CUSTOMER OTP request contract', async () => {

@@ -23,12 +23,10 @@ import { RbacService } from '../services/rbac/rbac.service.js';
 import { TotpService, totpService as defaultTotpService } from '../services/auth/totp.service.js';
 import { UserModel, type IUserDocument } from '../models/user.model.js';
 import { RoleModel } from '../models/role.model.js';
-import { getDatabaseDiagnostics } from '../database/database.js';
 import { verifyPassword } from '../services/auth/password.service.js';
 import { logger } from '../logger/logger.js';
 import type {
   AdminLoginDto,
-  AdminPasswordLoginDto,
   AdminMfaVerifyDto,
   AdminMfaVerifySetupDto,
   AdminMfaVerifyBackupDto,
@@ -139,10 +137,7 @@ export class AuthController {
     if (user.mfaLockedUntil) {
       const now = Date.now();
       if (user.mfaLockedUntil.getTime() > now) {
-        const remainingSecs = Math.max(
-          1,
-          Math.ceil((user.mfaLockedUntil.getTime() - now) / 1000),
-        );
+        const remainingSecs = Math.max(1, Math.ceil((user.mfaLockedUntil.getTime() - now) / 1000));
         res.status(429).json({
           success: false,
           error: {
@@ -185,11 +180,7 @@ export class AuthController {
    * POST /api/v1/auth/admin/login
    * Validates Admin email + password. Returns temporary MFA challenge token.
    */
-  public adminLogin = async (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> => {
+  public adminLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { email, password } = req.body as AdminLoginDto;
       const normalizedEmail = email.toLowerCase().trim();
@@ -262,11 +253,7 @@ export class AuthController {
    * POST /api/v1/auth/admin/mfa/setup
    * Initiates MFA enrollment. Generates Base32 secret, otpauth URI, and 10 backup codes.
    */
-  public adminMfaSetup = async (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> => {
+  public adminMfaSetup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const mfaToken = this.extractMfaToken(req);
       if (!mfaToken) {
@@ -1035,73 +1022,21 @@ export class AuthController {
     }
   };
 
-  /** Temporary development-only Admin sign-in, scoped to the isolated verification database. */
-  public adminPasswordLogin = async (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> => {
-    try {
-      const diagnostics = getDatabaseDiagnostics();
-      if (diagnostics.status !== 'connected' || diagnostics.name !== 'thehomez_admin_verify') {
-        res.status(404).json({
-          success: false,
-          error: {
-            code: 'AUTH_UNAVAILABLE',
-            message: 'Temporary Admin sign-in is unavailable.',
-            correlationId: req.correlationId,
-            timestamp: new Date().toISOString(),
-          },
-        });
-        return;
-      }
-
-      const { email, password } = req.body as AdminPasswordLoginDto;
-      const user = await UserModel.findOne({ email, userType: UserType.STAFF }).select(
-        '+passwordHash',
-      );
-      const passwordMatches = await verifyPassword(password, user?.passwordHash);
-
-      if (!user || user.status !== UserStatus.ACTIVE || !passwordMatches) {
-        res.status(401).json({
-          success: false,
-          error: {
-            code: 'INVALID_CREDENTIALS',
-            message: 'Invalid email or password.',
-            correlationId: req.correlationId,
-            timestamp: new Date().toISOString(),
-          },
-        });
-        return;
-      }
-
-      const permissions = await this.rbacService.getEffectivePermissions(user.roles || []);
-      const context = {
-        userAgent: req.headers['user-agent'],
-        ipAddress: req.ip || req.socket.remoteAddress,
-      };
-      const tokens = await this.tokenService.generateTokenPair(user, context);
-      setRefreshTokenCookie(res, tokens.refreshToken);
-
-      const responseTokens: IAuthResponse['tokens'] = isBrowserClient(req)
-        ? {
-            accessToken: tokens.accessToken,
-            expiresIn: tokens.expiresIn,
-            tokenType: tokens.tokenType,
-          }
-        : tokens;
-      const response: IApiResponse<IAuthResponse> = {
-        success: true,
-        data: {
-          tokens: responseTokens,
-          user: this.formatAuthUser(user, permissions),
-        },
-      };
-
-      res.status(200).json(response);
-    } catch (error) {
-      next(error);
-    }
+  /**
+   * Temporary development-only Admin sign-in has been permanently decommissioned.
+   * Standard MFA-enforced login (/admin/login) is strictly required.
+   */
+  public adminPasswordLogin = async (req: Request, res: Response): Promise<void> => {
+    res.status(404).json({
+      success: false,
+      error: {
+        code: 'AUTH_UNAVAILABLE',
+        message:
+          'Temporary password-only Admin sign-in has been permanently decommissioned. Use standard MFA authentication.',
+        correlationId: req.correlationId,
+        timestamp: new Date().toISOString(),
+      },
+    });
   };
 
   /**
@@ -1436,6 +1371,45 @@ export class AuthController {
       };
 
       res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * POST /api/v1/auth/admin/activity
+   * Records explicit client-side Admin user activity and confirms active session status.
+   */
+  public recordAdminActivity = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const adminSession = req.adminSession;
+      if (!adminSession) {
+        res.status(401).json({
+          success: false,
+          error: {
+            code: 'INVALID_SESSION',
+            message: 'Active Admin session required',
+            correlationId: req.correlationId,
+            timestamp: new Date().toISOString(),
+          },
+        });
+        return;
+      }
+
+      await this.tokenService.recordAdminActivity(adminSession._id);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          active: true,
+          lastActivityAt: new Date().toISOString(),
+          absoluteExpiresAt: adminSession.absoluteExpiresAt.toISOString(),
+        },
+      });
     } catch (error) {
       next(error);
     }

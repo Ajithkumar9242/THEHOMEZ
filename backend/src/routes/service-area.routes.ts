@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { PermissionCode } from '@thehomez/shared-types';
-import { authenticate, authorize } from '../middleware/auth.middleware.js';
+import { authenticate, authorize, staffOnlyGuard } from '../middleware/auth.middleware.js';
 import { validateBody } from '../middleware/validate.middleware.js';
 import { serviceAreaController } from '../controllers/service-area.controller.js';
 import { createServiceAreaSchema, updateServiceAreaSchema } from './service-area.schemas.js';
@@ -22,6 +22,7 @@ serviceAreaRouter.get('/check', (req, res, next) =>
 serviceAreaRouter.get(
   '/',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.SERVICE_AREA_READ),
   (req, res, next) => serviceAreaController.listServiceAreas(req, res, next),
 );
@@ -33,6 +34,7 @@ serviceAreaRouter.get(
 serviceAreaRouter.post(
   '/',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.SERVICE_AREA_WRITE),
   validateBody(createServiceAreaSchema),
   (req, res, next) => serviceAreaController.createServiceArea(req, res, next),
@@ -45,6 +47,7 @@ serviceAreaRouter.post(
 serviceAreaRouter.get(
   '/:id',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.SERVICE_AREA_READ),
   (req, res, next) => serviceAreaController.getServiceAreaById(req, res, next),
 );
@@ -56,6 +59,7 @@ serviceAreaRouter.get(
 serviceAreaRouter.patch(
   '/:id',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.SERVICE_AREA_WRITE),
   validateBody(updateServiceAreaSchema),
   (req, res, next) => serviceAreaController.updateServiceArea(req, res, next),
@@ -68,6 +72,7 @@ serviceAreaRouter.patch(
 serviceAreaRouter.get(
   '/:id/partners',
   authenticate,
+  staffOnlyGuard,
   authorize([PermissionCode.SERVICE_AREA_READ, PermissionCode.PARTNER_READ]),
   (req, res, next) => serviceAreaController.getPartnersForServiceArea(req, res, next),
 );

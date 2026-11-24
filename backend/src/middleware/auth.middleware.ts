@@ -115,6 +115,49 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       return;
     }
 
+    // 4a. Enforce Admin Session Lifetime (24h) & Idle Inactivity Timeout (30m) for STAFF identities
+    if (user.userType === UserType.STAFF) {
+      if (!decoded.sessionId || typeof decoded.sessionId !== 'string') {
+        sendSecurityError(
+          req,
+          res,
+          401,
+          'INVALID_SESSION',
+          'Admin session identifier missing from authentication token',
+        );
+        return;
+      }
+
+      const adminSession = await tokenService.validateAdminSession(decoded.sessionId);
+
+      // Verify session belongs to the authenticated user
+      if (adminSession.userId.toString() !== user._id.toString()) {
+        sendSecurityError(
+          req,
+          res,
+          401,
+          'INVALID_SESSION',
+          'Admin session does not match authenticated user identity',
+        );
+        return;
+      }
+
+      // Record meaningful activity if not explicitly marked as a background polling request.
+      // Exclude dedicated activity endpoint to prevent redundant double-writing,
+      // as its controller directly handles activity synchronization.
+      const isBackground =
+        req.headers['x-background-request'] === 'true' ||
+        req.path.endsWith('/health') ||
+        req.path.endsWith('/health/ready') ||
+        req.path.endsWith('/admin/activity');
+
+      if (!isBackground) {
+        await tokenService.recordAdminActivity(adminSession._id);
+      }
+
+      req.adminSession = adminSession;
+    }
+
     // 4b. Enforce Parent Partner Tenant Active Lifecycle Check for PARTNER identities
     if (user.userType === UserType.PARTNER) {
       if (!user.partnerId || !Types.ObjectId.isValid(user.partnerId.toString())) {

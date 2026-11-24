@@ -12,7 +12,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { ClearOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   PermissionCode,
@@ -150,6 +150,22 @@ export function ProductListPage() {
     setApplied(next);
     updateParams(1, limit, next);
   };
+  const clearFilters = () => {
+    setSearch('');
+    setStatus(undefined);
+    setCategoryId(undefined);
+    setSubcategoryId(undefined);
+    setBrand('');
+    const empty = {
+      search: '',
+      status: undefined,
+      categoryId: undefined,
+      subcategoryId: undefined,
+      brand: '',
+    };
+    setApplied(empty);
+    updateParams(1, limit, empty);
+  };
 
   if (!canRead)
     return (
@@ -244,9 +260,14 @@ export function ProductListPage() {
             onChange={(e) => setBrand(e.target.value)}
             onPressEnter={applyFilters}
           />
-          <Button type="primary" onClick={applyFilters}>
-            Apply filters
-          </Button>
+          <Space>
+            <Button type="primary" onClick={applyFilters}>
+              Apply filters
+            </Button>
+            <Button icon={<ClearOutlined />} onClick={clearFilters}>
+              Reset
+            </Button>
+          </Space>
         </div>
         {lookupError && (
           <Alert
@@ -301,7 +322,8 @@ export function ProductListPage() {
                 title: 'SKU',
                 dataIndex: 'sku',
                 key: 'sku',
-                render: (sku: string | null) => sku || '—',
+                render: (sku: string | null) =>
+                  sku ? <span className="sku-cell">{sku}</span> : '—',
               },
               {
                 title: 'Category',

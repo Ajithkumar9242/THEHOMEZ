@@ -35,13 +35,19 @@ export function clearAccessToken(): void {
   accessToken = null;
 }
 
-function headers(json = false, token = accessToken): Headers {
+function isFormData(body: unknown): boolean {
+  return typeof FormData !== 'undefined' && body instanceof FormData;
+}
+
+function headers(body?: unknown, token = accessToken): Headers {
   const result = new Headers({
     Accept: 'application/json',
     'X-Auth-Transport': 'cookie',
     'X-Client-Type': 'browser',
   });
-  if (json) result.set('Content-Type', 'application/json');
+  if (body !== undefined && !isFormData(body)) {
+    result.set('Content-Type', 'application/json');
+  }
   if (token) result.set('Authorization', `Bearer ${token}`);
   return result;
 }
@@ -52,7 +58,7 @@ async function request<T>(path: string, init: RequestInit = {}, token = accessTo
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
       credentials: 'include',
-      headers: headers(init.body !== undefined, token),
+      headers: headers(init.body, token),
     });
   } catch {
     if (init.signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
@@ -200,6 +206,15 @@ export const authApi = {
     const user = await request<{ user: IAuthUser }>('/auth/me');
     return user.user;
   },
+  async recordActivity(): Promise<void> {
+    try {
+      await request<{ active: boolean }>('/auth/admin/activity', {
+        method: 'POST',
+      });
+    } catch {
+      // Ignore background activity sync errors
+    }
+  },
   async logout(): Promise<ILogoutResponse> {
     const token = accessToken;
     accessToken = null;
@@ -224,7 +239,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     fetch(`${API_BASE}${path}`, {
       ...init,
       credentials: 'include',
-      headers: headers(init.body !== undefined, token),
+      headers: headers(init.body, token),
     });
   let response: Response;
   try {

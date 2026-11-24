@@ -30,6 +30,7 @@ export * from './commerce/partner.js';
 export * from './commerce/partner-application.js';
 export * from './commerce/cart.js';
 export * from './commerce/checkout.js';
+export * from './commerce/admin-dashboard.js';
 
 // Common Utilities & Types
 export * from './common/money.js';

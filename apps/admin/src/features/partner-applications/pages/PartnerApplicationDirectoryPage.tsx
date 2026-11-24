@@ -54,21 +54,28 @@ export function PartnerApplicationDirectoryPage() {
   }
 
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', paddingBottom: 32 }}>
+    <div className="partner-application-page">
       {/* Page Header */}
-      <div style={{ marginBottom: 20 }}>
-        <Typography.Text type="secondary" style={{ textTransform: 'uppercase', letterSpacing: 1, fontSize: 12 }}>
-          PARTNER ONBOARDING
-        </Typography.Text>
-        <Typography.Title level={2} style={{ marginTop: 4, marginBottom: 4 }}>
-          Partner Applications
-        </Typography.Title>
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          Manage candidate partner intake, track compliance review pipelines, and process transactional approval gates.
-        </Typography.Paragraph>
+      <div className="catalogue-heading">
+        <div>
+          <Typography.Text
+            className="eyebrow"
+            type="secondary"
+            style={{ textTransform: 'uppercase', letterSpacing: 1, fontSize: 12 }}
+          >
+            PARTNER ONBOARDING
+          </Typography.Text>
+          <Typography.Title level={2} style={{ marginTop: 4, marginBottom: 4 }}>
+            Partner Applications
+          </Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            Manage candidate partner intake, track compliance review pipelines, and process
+            transactional approval gates.
+          </Typography.Paragraph>
+        </div>
       </div>
 
-      <Card>
+      <Card variant="borderless" className="catalogue-card">
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <PartnerApplicationDirectoryFilters
             searchInput={searchInput}

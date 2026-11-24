@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { PermissionCode } from '@thehomez/shared-types';
 import { AuthController } from '../controllers/auth.controller.js';
-import { getConfig } from '../config/env.js';
 import {
   authenticate,
   optionalAuthenticate,
@@ -16,7 +15,6 @@ import {
   otpRequestSchema,
   otpVerifySchema,
   adminLoginSchema,
-  adminPasswordLoginSchema,
   adminMfaSetupSchema,
   adminMfaVerifySetupSchema,
   adminMfaVerifySchema,
@@ -33,11 +31,13 @@ export function createAuthRouter(controller?: AuthController): Router {
 
   const adminLogin = authController.adminLogin || defaultController.adminLogin;
   const adminMfaSetup = authController.adminMfaSetup || defaultController.adminMfaSetup;
-  const adminMfaVerifySetup = authController.adminMfaVerifySetup || defaultController.adminMfaVerifySetup;
+  const adminMfaVerifySetup =
+    authController.adminMfaVerifySetup || defaultController.adminMfaVerifySetup;
   const adminMfaVerify = authController.adminMfaVerify || defaultController.adminMfaVerify;
-  const adminMfaVerifyBackup = authController.adminMfaVerifyBackup || defaultController.adminMfaVerifyBackup;
-  const adminRegenerateBackupCodes = authController.adminRegenerateBackupCodes || defaultController.adminRegenerateBackupCodes;
-  const adminPasswordLogin = authController.adminPasswordLogin || defaultController.adminPasswordLogin;
+  const adminMfaVerifyBackup =
+    authController.adminMfaVerifyBackup || defaultController.adminMfaVerifyBackup;
+  const adminRegenerateBackupCodes =
+    authController.adminRegenerateBackupCodes || defaultController.adminRegenerateBackupCodes;
   const requestOtp = authController.requestOtp || defaultController.requestOtp;
   const verifyOtp = authController.verifyOtp || defaultController.verifyOtp;
   const refreshToken = authController.refreshToken || defaultController.refreshToken;
@@ -45,6 +45,8 @@ export function createAuthRouter(controller?: AuthController): Router {
   const logoutAll = authController.logoutAll || defaultController.logoutAll;
   const getMe = authController.getMe || defaultController.getMe;
   const getRoles = authController.getRoles || defaultController.getRoles;
+  const recordAdminActivity =
+    authController.recordAdminActivity || defaultController.recordAdminActivity;
 
   // Dual rate limiters for OTP operations: Global IP layer + Scoped Phone/IP layer
   const otpIpRateLimiter = createOtpIpRateLimiter();
@@ -106,16 +108,7 @@ export function createAuthRouter(controller?: AuthController): Router {
     adminRegenerateBackupCodes,
   );
 
-  // Temporary Admin password auth is preserved for development and existing test compatibility.
-  if (getConfig().isDevelopment || getConfig().isTest) {
-    router.post(
-      '/admin/password',
-      createAuthRateLimiter(),
-      csrfProtectionMiddleware,
-      validateBody(adminPasswordLoginSchema),
-      adminPasswordLogin,
-    );
-  }
+  router.post('/admin/activity', authenticate, staffOnlyGuard, recordAdminActivity);
 
   // 1. Phone OTP Request (Dual Rate-Limited: Global IP + Phone/IP, Validated)
   router.post(
@@ -164,6 +157,7 @@ export function createAuthRouter(controller?: AuthController): Router {
   router.get(
     '/roles',
     authenticate,
+    staffOnlyGuard,
     authorize(PermissionCode.RBAC_MANAGE),
     getRoles,
   );

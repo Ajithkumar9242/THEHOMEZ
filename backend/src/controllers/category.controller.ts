@@ -7,6 +7,7 @@ import type {
 } from '@thehomez/shared-types';
 import { PermissionCode, UserType } from '@thehomez/shared-types';
 import { categoryService, CategoryService } from '../services/catalog/category.service.js';
+import { logger } from '../logger/logger.js';
 
 export class CategoryController {
   /**
@@ -28,7 +29,7 @@ export class CategoryController {
   public async getCategoryTree(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const includeInactive =
-        req.query.includeInactive === 'true' && CategoryController.canViewInactive(req);
+        String(req.query.includeInactive) === 'true' && CategoryController.canViewInactive(req);
 
       const categories = await categoryService.getCategoryTree(includeInactive);
 
@@ -49,7 +50,7 @@ export class CategoryController {
   public async getCategoryBySlug(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const includeInactive =
-        req.query.includeInactive === 'true' && CategoryController.canViewInactive(req);
+        String(req.query.includeInactive) === 'true' && CategoryController.canViewInactive(req);
 
       const slug = String(req.params.slug);
       const result = await categoryService.getCategoryBySlug(slug, includeInactive);
@@ -86,10 +87,24 @@ export class CategoryController {
 
   /**
    * Admin: Create a new category or subcategory (requires CATALOG_WRITE).
+   * Audited under FR-ADM-009.
    */
   public async createCategory(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const newCategory = await categoryService.createCategory(req.body);
+
+      logger.info(
+        {
+          audit: true,
+          action: 'CATEGORY_CREATE',
+          categoryId: newCategory._id.toString(),
+          slug: newCategory.slug,
+          level: newCategory.level,
+          performedBy: req.user?.id,
+          correlationId: req.correlationId,
+        },
+        'Audit: Category created successfully',
+      );
 
       const response: IApiResponse<{ category: ICategory }> = {
         success: true,
@@ -104,11 +119,25 @@ export class CategoryController {
 
   /**
    * Admin: Update an existing category (requires CATALOG_WRITE).
+   * Audited under FR-ADM-009.
    */
   public async updateCategory(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = String(req.params.id);
       const updatedCategory = await categoryService.updateCategory(id, req.body);
+
+      logger.info(
+        {
+          audit: true,
+          action: 'CATEGORY_UPDATE',
+          categoryId: updatedCategory._id.toString(),
+          slug: updatedCategory.slug,
+          isActive: updatedCategory.isActive,
+          performedBy: req.user?.id,
+          correlationId: req.correlationId,
+        },
+        'Audit: Category updated successfully',
+      );
 
       const response: IApiResponse<{ category: ICategory }> = {
         success: true,
@@ -123,11 +152,23 @@ export class CategoryController {
 
   /**
    * Admin: Delete a category (requires CATALOG_WRITE).
+   * Audited under FR-ADM-009.
    */
   public async deleteCategory(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = String(req.params.id);
       await categoryService.deleteCategory(id);
+
+      logger.info(
+        {
+          audit: true,
+          action: 'CATEGORY_DELETE',
+          categoryId: id,
+          performedBy: req.user?.id,
+          correlationId: req.correlationId,
+        },
+        'Audit: Category deleted successfully',
+      );
 
       const response: IApiResponse<{ message: string }> = {
         success: true,

@@ -3,10 +3,15 @@ import jwt, { type SignOptions, type JwtPayload } from 'jsonwebtoken';
 import type { IAuthTokens } from '@thehomez/shared-types';
 import { UserType, UserStatus } from '@thehomez/shared-types';
 import { RefreshTokenModel } from '../../models/refresh-token.model.js';
+import { AdminSessionModel, type IAdminSessionDocument } from '../../models/admin-session.model.js';
 import { UserModel, type IUserDocument } from '../../models/user.model.js';
 import { PartnerModel } from '../../models/partner.model.js';
 import { getConfig } from '../../config/env.js';
 import { logger } from '../../logger/logger.js';
+
+export const ADMIN_SESSION_ABSOLUTE_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const ADMIN_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+export const ACTIVITY_UPDATE_THROTTLE_MS = 60 * 1000; // 1 minute
 
 export class TokenError extends Error {
   constructor(
@@ -25,6 +30,7 @@ export interface IAccessTokenPayload extends JwtPayload {
   roles: string[];
   partnerId?: string;
   customerId?: string;
+  sessionId?: string;
 }
 
 export interface IMfaTokenPayload extends JwtPayload {
@@ -71,7 +77,7 @@ export class TokenService {
    * Signs a short-lived JWT access token for an authenticated user principal.
    * Keeps claims minimal (sub, userType, roles, partnerId, customerId).
    */
-  public signAccessToken(user: IUserDocument): string {
+  public signAccessToken(user: IUserDocument, sessionId?: string): string {
     const config = getConfig();
 
     const payload: IAccessTokenPayload = {
@@ -80,6 +86,7 @@ export class TokenService {
       roles: user.roles || [],
       ...(user.partnerId ? { partnerId: user.partnerId.toString() } : {}),
       ...(user.customerId ? { customerId: user.customerId.toString() } : {}),
+      ...(sessionId ? { sessionId } : {}),
     };
 
     const options: SignOptions = {
@@ -191,10 +198,12 @@ export class TokenService {
   public async generateTokenPair(
     user: IUserDocument,
     context?: { userAgent?: string; ipAddress?: string },
+    injectedNow?: Date,
   ): Promise<IAuthTokens> {
     const config = getConfig();
+    const now = injectedNow || new Date();
 
-    // 1. Generate new rotation family identifier
+    // 1. Generate new rotation family identifier (serves as sessionId for STAFF)
     const familyId = crypto.randomUUID();
 
     // 2. Generate opaque refresh token: familyId.32-bytes-base64url
@@ -203,7 +212,25 @@ export class TokenService {
     const tokenHash = hashToken(rawRefreshToken);
 
     const refreshTtlSeconds = parseDurationToSeconds(config.auth.refreshToken.expiresIn);
-    const expiresAt = new Date(Date.now() + refreshTtlSeconds * 1000);
+    let expiresAt = new Date(now.getTime() + refreshTtlSeconds * 1000);
+
+    // 2b. For STAFF (Admin): Establish 24h absolute session lifetime and initial activity
+    if (user.userType === UserType.STAFF) {
+      const absoluteExpiresAt = new Date(now.getTime() + ADMIN_SESSION_ABSOLUTE_LIFETIME_MS);
+      if (expiresAt.getTime() > absoluteExpiresAt.getTime()) {
+        expiresAt = absoluteExpiresAt;
+      }
+
+      await AdminSessionModel.create({
+        _id: familyId,
+        userId: user._id,
+        createdAt: now,
+        absoluteExpiresAt,
+        lastActivityAt: now,
+        isRevoked: false,
+        metadata: context,
+      });
+    }
 
     // 3. Persist hashed refresh token record
     await RefreshTokenModel.create({
@@ -216,8 +243,11 @@ export class TokenService {
       metadata: context,
     });
 
-    // 4. Sign JWT access token
-    const accessToken = this.signAccessToken(user);
+    // 4. Sign JWT access token (includes sessionId for STAFF)
+    const accessToken = this.signAccessToken(
+      user,
+      user.userType === UserType.STAFF ? familyId : undefined,
+    );
     const accessTtlSeconds = parseDurationToSeconds(config.auth.jwt.accessExpiresIn);
 
     return {
@@ -233,10 +263,17 @@ export class TokenService {
    *
    * If a previously rotated or revoked token is reused, the entire token family is immediately
    * revoked to neutralize compromised sessions.
+   *
+   * For Admin (STAFF) sessions, verifies that:
+   * 1. Absolute session lifetime (24 hours) has not been exceeded.
+   * 2. Idle inactivity timeout (30 minutes) has not been exceeded.
+   * 3. Background refresh requests DO NOT reset the idle timer.
+   * 4. Child refresh token expiration cannot exceed the original 24h absolute boundary.
    */
   public async rotateRefreshToken(
     rawRefreshToken: string,
     context?: { userAgent?: string; ipAddress?: string },
+    injectedNow?: Date,
   ): Promise<IAuthTokens> {
     if (!rawRefreshToken || typeof rawRefreshToken !== 'string' || !rawRefreshToken.includes('.')) {
       throw new TokenError('Invalid refresh token format', 'INVALID_REFRESH_TOKEN', 401);
@@ -250,6 +287,8 @@ export class TokenService {
       throw new TokenError('Refresh token not found or expired', 'REFRESH_TOKEN_NOT_FOUND', 401);
     }
 
+    const now = injectedNow || new Date();
+
     // Scenario 2: REUSE DETECTION — Token was previously revoked/consumed!
     if (existingRecord.isRevoked) {
       // Invalidate the entire rotation family immediately to prevent unauthorized access
@@ -259,10 +298,23 @@ export class TokenService {
           $set: {
             isRevoked: true,
             revokedReason: 'REUSE_DETECTED',
-            revokedAt: new Date(),
+            revokedAt: now,
           },
         },
       );
+
+      if (existingRecord.userType === UserType.STAFF) {
+        await AdminSessionModel.updateOne(
+          { _id: existingRecord.familyId, isRevoked: false },
+          {
+            $set: {
+              isRevoked: true,
+              revokedReason: 'REUSE_DETECTED',
+              revokedAt: now,
+            },
+          },
+        );
+      }
 
       logger.warn(
         {
@@ -281,12 +333,17 @@ export class TokenService {
     }
 
     // Scenario 3: Token is expired
-    const now = new Date();
     if (existingRecord.isExpired(now)) {
       await RefreshTokenModel.updateOne(
         { _id: existingRecord._id },
         { $set: { isRevoked: true, revokedReason: 'EXPIRED', revokedAt: now } },
       );
+      if (existingRecord.userType === UserType.STAFF) {
+        await AdminSessionModel.updateOne(
+          { _id: existingRecord.familyId, isRevoked: false },
+          { $set: { isRevoked: true, revokedReason: 'EXPIRED', revokedAt: now } },
+        );
+      }
       throw new TokenError('Refresh token has expired', 'REFRESH_TOKEN_EXPIRED', 401);
     }
 
@@ -298,6 +355,12 @@ export class TokenService {
         { familyId: existingRecord.familyId },
         { $set: { isRevoked: true, revokedReason: 'ACCOUNT_SUSPENDED', revokedAt: now } },
       );
+      if (existingRecord.userType === UserType.STAFF) {
+        await AdminSessionModel.updateOne(
+          { _id: existingRecord.familyId },
+          { $set: { isRevoked: true, revokedReason: 'ACCOUNT_SUSPENDED', revokedAt: now } },
+        );
+      }
       throw new TokenError(
         'User account is suspended or no longer exists',
         'ACCOUNT_NOT_ACTIVE',
@@ -321,6 +384,56 @@ export class TokenService {
           403,
         );
       }
+    }
+
+    // Scenario 4c: Admin Absolute Lifetime (24h) & Idle Inactivity Timeout (30m) verification
+    let adminSession: IAdminSessionDocument | null = null;
+    if (user.userType === UserType.STAFF) {
+      adminSession = await AdminSessionModel.findById(existingRecord.familyId);
+      if (!adminSession) {
+        throw new TokenError('Admin session not found', 'INVALID_SESSION', 401);
+      }
+      if (adminSession.isRevoked) {
+        throw new TokenError('Admin session has been revoked', 'SESSION_REVOKED', 401);
+      }
+
+      // 1. Check absolute expiration: 24 hours from session creation
+      if (adminSession.isAbsoluteExpired(now)) {
+        await AdminSessionModel.updateOne(
+          { _id: adminSession._id },
+          { $set: { isRevoked: true, revokedReason: 'ABSOLUTE_TIMEOUT', revokedAt: now } },
+        );
+        await RefreshTokenModel.updateMany(
+          { familyId: existingRecord.familyId, isRevoked: false },
+          { $set: { isRevoked: true, revokedReason: 'ABSOLUTE_TIMEOUT', revokedAt: now } },
+        );
+        throw new TokenError(
+          'Admin session has reached the 24-hour absolute lifetime limit',
+          'ADMIN_SESSION_ABSOLUTE_TIMEOUT',
+          401,
+        );
+      }
+
+      // 2. Check idle inactivity timeout: 30 minutes without meaningful user activity
+      if (adminSession.isIdleExpired(now, ADMIN_SESSION_IDLE_TIMEOUT_MS)) {
+        await AdminSessionModel.updateOne(
+          { _id: adminSession._id },
+          { $set: { isRevoked: true, revokedReason: 'IDLE_TIMEOUT', revokedAt: now } },
+        );
+        await RefreshTokenModel.updateMany(
+          { familyId: existingRecord.familyId, isRevoked: false },
+          { $set: { isRevoked: true, revokedReason: 'IDLE_TIMEOUT', revokedAt: now } },
+        );
+        throw new TokenError(
+          'Admin session has expired due to 30 minutes of inactivity',
+          'ADMIN_SESSION_IDLE_TIMEOUT',
+          401,
+        );
+      }
+
+      // CRITICAL POLICY ENFORCEMENT:
+      // Background refresh requests MUST NOT reset the idle timer!
+      // adminSession.lastActivityAt is intentionally preserved as-is.
     }
 
     // Scenario 5: ATOMIC ROTATION
@@ -349,6 +462,18 @@ export class TokenService {
         { familyId: existingRecord.familyId },
         { $set: { isRevoked: true, revokedReason: 'REUSE_DETECTED', revokedAt: now } },
       );
+      if (existingRecord.userType === UserType.STAFF) {
+        await AdminSessionModel.updateOne(
+          { _id: existingRecord.familyId },
+          {
+            $set: {
+              isRevoked: true,
+              revokedReason: 'CONCURRENT_ROTATION_CONFLICT',
+              revokedAt: now,
+            },
+          },
+        );
+      }
       throw new TokenError(
         'Concurrent rotation conflict. Session revoked',
         'CONCURRENT_ROTATION_CONFLICT',
@@ -358,7 +483,12 @@ export class TokenService {
 
     // Issue child token in the same family
     const refreshTtlSeconds = parseDurationToSeconds(config.auth.refreshToken.expiresIn);
-    const expiresAt = new Date(Date.now() + refreshTtlSeconds * 1000);
+    let expiresAt = new Date(now.getTime() + refreshTtlSeconds * 1000);
+
+    // Capping: child refresh token can NEVER extend past the session's absolute 24h expiration
+    if (adminSession && expiresAt.getTime() > adminSession.absoluteExpiresAt.getTime()) {
+      expiresAt = adminSession.absoluteExpiresAt;
+    }
 
     await RefreshTokenModel.create({
       tokenHash: newTokenHash,
@@ -370,8 +500,11 @@ export class TokenService {
       metadata: context,
     });
 
-    // Issue fresh access token
-    const accessToken = this.signAccessToken(user);
+    // Issue fresh access token (including sessionId for STAFF)
+    const accessToken = this.signAccessToken(
+      user,
+      user.userType === UserType.STAFF ? existingRecord.familyId : undefined,
+    );
     const accessTtlSeconds = parseDurationToSeconds(config.auth.jwt.accessExpiresIn);
 
     return {
@@ -383,39 +516,160 @@ export class TokenService {
   }
 
   /**
+   * Validates active status, absolute lifetime, and idle timeout for an Admin session.
+   * Throws TokenError if expired, revoked, or invalid.
+   */
+  public async validateAdminSession(
+    sessionId: string,
+    now: Date = new Date(),
+  ): Promise<IAdminSessionDocument> {
+    if (!sessionId || typeof sessionId !== 'string') {
+      throw new TokenError('Admin session identifier missing', 'INVALID_SESSION', 401);
+    }
+
+    const session = await AdminSessionModel.findById(sessionId);
+    if (!session) {
+      throw new TokenError('Admin session not found', 'INVALID_SESSION', 401);
+    }
+
+    if (session.isRevoked) {
+      throw new TokenError(
+        `Admin session has been revoked (${session.revokedReason || 'REVOKED'})`,
+        'SESSION_REVOKED',
+        401,
+      );
+    }
+
+    // Check 24-hour absolute expiration
+    if (session.isAbsoluteExpired(now)) {
+      await AdminSessionModel.updateOne(
+        { _id: session._id, isRevoked: false },
+        { $set: { isRevoked: true, revokedReason: 'ABSOLUTE_TIMEOUT', revokedAt: now } },
+      );
+      await RefreshTokenModel.updateMany(
+        { familyId: sessionId, isRevoked: false },
+        { $set: { isRevoked: true, revokedReason: 'ABSOLUTE_TIMEOUT', revokedAt: now } },
+      );
+      throw new TokenError(
+        'Admin session has reached the 24-hour absolute lifetime limit',
+        'ADMIN_SESSION_ABSOLUTE_TIMEOUT',
+        401,
+      );
+    }
+
+    // Check 30-minute idle inactivity timeout
+    if (session.isIdleExpired(now, ADMIN_SESSION_IDLE_TIMEOUT_MS)) {
+      await AdminSessionModel.updateOne(
+        { _id: session._id, isRevoked: false },
+        { $set: { isRevoked: true, revokedReason: 'IDLE_TIMEOUT', revokedAt: now } },
+      );
+      await RefreshTokenModel.updateMany(
+        { familyId: sessionId, isRevoked: false },
+        { $set: { isRevoked: true, revokedReason: 'IDLE_TIMEOUT', revokedAt: now } },
+      );
+      throw new TokenError(
+        'Admin session has expired due to 30 minutes of inactivity',
+        'ADMIN_SESSION_IDLE_TIMEOUT',
+        401,
+      );
+    }
+
+    return session;
+  }
+
+  /**
+   * Records meaningful Admin user activity with safe 60-second throttling.
+   * Avoids writing to MongoDB on every keystroke or rapid successive requests.
+   */
+  public async recordAdminActivity(
+    sessionId: string,
+    now: Date = new Date(),
+    force: boolean = false,
+  ): Promise<void> {
+    if (!sessionId) return;
+
+    if (force) {
+      await AdminSessionModel.updateOne(
+        { _id: sessionId, isRevoked: false },
+        { $set: { lastActivityAt: now } },
+      );
+      return;
+    }
+
+    const throttleThreshold = new Date(now.getTime() - ACTIVITY_UPDATE_THROTTLE_MS);
+    await AdminSessionModel.updateOne(
+      {
+        _id: sessionId,
+        isRevoked: false,
+        lastActivityAt: { $lt: throttleThreshold },
+      },
+      {
+        $set: { lastActivityAt: now },
+      },
+    );
+  }
+
+  /**
    * Revokes a specific active refresh token upon user logout.
+   * For Admin sessions, also marks the parent Admin session record revoked.
    */
   public async revokeRefreshToken(rawRefreshToken: string): Promise<void> {
     if (!rawRefreshToken || typeof rawRefreshToken !== 'string') {
       return;
     }
     const tokenHash = hashToken(rawRefreshToken.trim());
-    await RefreshTokenModel.updateOne(
-      { tokenHash, isRevoked: false },
-      {
-        $set: {
-          isRevoked: true,
-          revokedReason: 'LOGOUT',
-          revokedAt: new Date(),
+    const existing = await RefreshTokenModel.findOne({ tokenHash });
+    if (existing) {
+      await RefreshTokenModel.updateOne(
+        { _id: existing._id, isRevoked: false },
+        {
+          $set: {
+            isRevoked: true,
+            revokedReason: 'LOGOUT',
+            revokedAt: new Date(),
+          },
         },
-      },
-    );
+      );
+      if (existing.userType === UserType.STAFF) {
+        await AdminSessionModel.updateOne(
+          { _id: existing.familyId, isRevoked: false },
+          {
+            $set: {
+              isRevoked: true,
+              revokedReason: 'LOGOUT',
+              revokedAt: new Date(),
+            },
+          },
+        );
+      }
+    }
   }
 
   /**
-   * Revokes all active refresh tokens for a user across all devices (e.g. on password reset or account freeze).
+   * Revokes all active refresh tokens and sessions for a user across all devices.
    */
   public async revokeAllUserSessions(
     userId: string,
     reason: string = 'SECURITY_RESET',
   ): Promise<void> {
+    const now = new Date();
     await RefreshTokenModel.updateMany(
       { userId, isRevoked: false },
       {
         $set: {
           isRevoked: true,
           revokedReason: reason,
-          revokedAt: new Date(),
+          revokedAt: now,
+        },
+      },
+    );
+    await AdminSessionModel.updateMany(
+      { userId, isRevoked: false },
+      {
+        $set: {
+          isRevoked: true,
+          revokedReason: reason,
+          revokedAt: now,
         },
       },
     );

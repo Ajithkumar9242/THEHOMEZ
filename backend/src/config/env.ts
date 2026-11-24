@@ -131,6 +131,12 @@ const rawEnvSchema = z
       .min(1, { message: 'OTP_IP_RATE_LIMIT_MAX_REQUESTS must be >= 1' })
       .default(25),
     TRUST_PROXY: z.string().optional(),
+
+    // Cloudinary Storage configuration (Product & Catalogue Images)
+    CLOUDINARY_CLOUD_NAME: z.string().trim().optional(),
+    CLOUDINARY_API_KEY: z.string().trim().optional(),
+    CLOUDINARY_API_SECRET: z.string().trim().optional(),
+    CLOUDINARY_FOLDER: z.string().trim().default('thehomez/products'),
   })
   .superRefine((data, ctx) => {
     // In production, MONGODB_URI and CORS_ORIGIN are mandatory
@@ -223,6 +229,34 @@ const rawEnvSchema = z
         message: 'OTP_RESEND_COOLDOWN_SECONDS cannot exceed OTP_TTL_SECONDS',
       });
     }
+
+    // Cloudinary credential consistency: if any credential is provided, all three must be present
+    const hasCloudName = Boolean(data.CLOUDINARY_CLOUD_NAME?.trim());
+    const hasApiKey = Boolean(data.CLOUDINARY_API_KEY?.trim());
+    const hasApiSecret = Boolean(data.CLOUDINARY_API_SECRET?.trim());
+    if (hasCloudName || hasApiKey || hasApiSecret) {
+      if (!hasCloudName) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CLOUDINARY_CLOUD_NAME'],
+          message: 'CLOUDINARY_CLOUD_NAME is required when Cloudinary credentials are provided',
+        });
+      }
+      if (!hasApiKey) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CLOUDINARY_API_KEY'],
+          message: 'CLOUDINARY_API_KEY is required when Cloudinary credentials are provided',
+        });
+      }
+      if (!hasApiSecret) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CLOUDINARY_API_SECRET'],
+          message: 'CLOUDINARY_API_SECRET is required when Cloudinary credentials are provided',
+        });
+      }
+    }
   });
 
 export interface AppConfig {
@@ -244,6 +278,12 @@ export interface AppConfig {
   };
   logging: {
     level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' | 'silent';
+  };
+  cloudinary?: {
+    cloudName: string;
+    apiKey: string;
+    apiSecret: string;
+    folder: string;
   };
   auth: {
     jwt: {
@@ -408,6 +448,16 @@ export function validateConfig(rawEnv: Record<string, unknown> = process.env): A
         otpIpMaxRequests: data.OTP_IP_RATE_LIMIT_MAX_REQUESTS,
       },
     },
+    ...(data.CLOUDINARY_CLOUD_NAME && data.CLOUDINARY_API_KEY && data.CLOUDINARY_API_SECRET
+      ? {
+          cloudinary: {
+            cloudName: data.CLOUDINARY_CLOUD_NAME,
+            apiKey: data.CLOUDINARY_API_KEY,
+            apiSecret: data.CLOUDINARY_API_SECRET,
+            folder: data.CLOUDINARY_FOLDER,
+          },
+        }
+      : {}),
   };
 }
 

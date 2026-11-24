@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -13,7 +13,18 @@ import {
   Select,
   Space,
   Tag,
+  Typography,
 } from 'antd';
+import {
+  ReloadOutlined,
+  BarcodeOutlined,
+  CheckOutlined,
+  ColumnWidthOutlined,
+  FolderOutlined,
+  InfoCircleOutlined,
+  PictureOutlined,
+  UnorderedListOutlined,
+} from '@ant-design/icons';
 import {
   CANONICAL_SKU_REGEX,
   DECIMAL_STRING_REGEX,
@@ -28,7 +39,7 @@ import {
 import { ApiError } from '../../../services/api-client.js';
 import { productClient } from '../api/product-client.js';
 import { getCategories, getUnits } from '../api/catalogue-lookups.js';
-import { ImageUrlManager } from './ImageUrlManager.js';
+import { ProductImageUploader } from './ProductImageUploader.js';
 import { SpecificationEditor } from './SpecificationEditor.js';
 
 export interface ProductFormDrawerProps {
@@ -67,24 +78,51 @@ export function ProductFormDrawer({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [categories, setCategories] = useState<ICategoryTreeItem[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+
   const [units, setUnits] = useState<IUnit[]>([]);
   const [images, setImages] = useState<string[]>([]);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [specifications, setSpecifications] = useState<Record<string, string>>({});
 
   const watchedCategoryId = Form.useWatch('categoryId', form);
   const watchedHasVariants = Form.useWatch('hasVariants', form);
   const watchedUnitCode = Form.useWatch('unitCode', form);
 
+  // Load categories with retry and error reporting
+  const loadCategories = useCallback((signal?: AbortSignal) => {
+    setLoadingCategories(true);
+    setCategoryError(null);
+
+    return getCategories(signal)
+      .then((res) => {
+        if (!signal?.aborted) {
+          setCategories(res.tree);
+          setCategoryError(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (signal?.aborted) return;
+        if (err instanceof ApiError) {
+          setCategoryError(`${err.message} (${err.code})`);
+        } else if (err instanceof Error) {
+          setCategoryError(err.message);
+        } else {
+          setCategoryError('Failed to load categories. Please check connection and try again.');
+        }
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoadingCategories(false);
+      });
+  }, []);
+
   // Load categories and units on open
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
 
-    void getCategories(controller.signal)
-      .then((res) => {
-        if (!controller.signal.aborted) setCategories(res.tree);
-      })
-      .catch(() => undefined);
+    void loadCategories(controller.signal);
 
     void getUnits(controller.signal)
       .then((res) => {
@@ -93,7 +131,7 @@ export function ProductFormDrawer({
       .catch(() => undefined);
 
     return () => controller.abort();
-  }, [open]);
+  }, [open, loadCategories]);
 
   // Populate or reset form values
   useEffect(() => {
@@ -149,12 +187,30 @@ export function ProductFormDrawer({
     }
   }, [open, mode, product, form]);
 
-  // Calculate available subcategories from selected root
-  const subcategories = useMemo(() => {
-    if (!watchedCategoryId) return [];
-    const root = categories.find((c) => c.id === watchedCategoryId);
-    return root?.subcategories || [];
+  // Selected root category object
+  const selectedRootCategory = useMemo(() => {
+    if (!watchedCategoryId) return null;
+    return categories.find((c) => c.id === watchedCategoryId) || null;
   }, [categories, watchedCategoryId]);
+
+  // Calculate available subcategories strictly from selected root
+  const subcategories = useMemo(() => {
+    return selectedRootCategory?.subcategories || [];
+  }, [selectedRootCategory]);
+
+  // Synchronize and auto-clear subcategory if root changes or selected sub does not belong to root
+  useEffect(() => {
+    if (!watchedCategoryId) {
+      if (form.getFieldValue('subcategoryId')) {
+        form.setFieldValue('subcategoryId', '');
+      }
+      return;
+    }
+    const currentSub = form.getFieldValue('subcategoryId');
+    if (currentSub && !subcategories.some((s) => s.id === currentSub)) {
+      form.setFieldValue('subcategoryId', '');
+    }
+  }, [watchedCategoryId, subcategories, form]);
 
   // Selected unit details
   const selectedUnit = useMemo(() => {
@@ -280,9 +336,30 @@ export function ProductFormDrawer({
       title={mode === 'create' ? 'Create Product Draft' : `Edit Product: ${product?.title}`}
       open={open}
       onClose={onClose}
-      width={720}
+      width={740}
       destroyOnClose
       maskClosable={!submitting}
+      footer={
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, padding: '4px 0' }}>
+          <Button onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            type="primary"
+            loading={submitting}
+            disabled={submitting || isUploadingImages}
+            onClick={() => form.submit()}
+            icon={<CheckOutlined />}
+            title={isUploadingImages ? 'Please wait for image uploads to complete' : undefined}
+          >
+            {isUploadingImages
+              ? 'Uploading Images...'
+              : mode === 'create'
+                ? 'Create Draft'
+                : 'Save Changes'}
+          </Button>
+        </div>
+      }
       extra={
         <Space>
           <Button onClick={onClose} disabled={submitting}>
@@ -291,10 +368,16 @@ export function ProductFormDrawer({
           <Button
             type="primary"
             loading={submitting}
+            disabled={submitting || isUploadingImages}
             onClick={() => form.submit()}
             aria-label="Save product button"
+            title={isUploadingImages ? 'Please wait for image uploads to complete' : undefined}
           >
-            {mode === 'create' ? 'Create Draft' : 'Save Changes'}
+            {isUploadingImages
+              ? 'Uploading Images...'
+              : mode === 'create'
+                ? 'Create Draft'
+                : 'Save Changes'}
           </Button>
         </Space>
       }
@@ -317,7 +400,16 @@ export function ProductFormDrawer({
           />
         )}
 
-        <Card title="Basic Information" variant="borderless" style={{ marginBottom: 16 }}>
+        <Card
+          title={
+            <Space size={8}>
+              <InfoCircleOutlined style={{ color: '#8b2626' }} />
+              <span>1. Basic Information</span>
+            </Space>
+          }
+          variant="borderless"
+          style={{ marginBottom: 16 }}
+        >
           <Row gutter={16}>
             <Col span={16}>
               <Form.Item
@@ -390,49 +482,6 @@ export function ProductFormDrawer({
             </Col>
           </Row>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="categoryId"
-                label="Root Category"
-                rules={[{ required: true, message: 'Root category is required' }]}
-              >
-                <Select
-                  placeholder="Select root category"
-                  showSearch
-                  optionFilterProp="label"
-                  onChange={() => {
-                    form.setFieldValue('subcategoryId', '');
-                  }}
-                  options={categories.map((c) => ({
-                    value: c.id,
-                    label: c.isActive ? c.name : `${c.name} (Draft only - Inactive)`,
-                  }))}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="subcategoryId"
-                label="Subcategory"
-                rules={[{ required: true, message: 'Subcategory is required' }]}
-              >
-                <Select
-                  placeholder={
-                    watchedCategoryId ? 'Select subcategory' : 'Select root category first'
-                  }
-                  showSearch
-                  optionFilterProp="label"
-                  disabled={!watchedCategoryId}
-                  options={subcategories.map((s) => ({
-                    value: s.id,
-                    label: s.isActive ? s.name : `${s.name} (Draft only - Inactive)`,
-                  }))}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
           <Form.Item
             name="description"
             label="Description"
@@ -447,8 +496,179 @@ export function ProductFormDrawer({
           </Form.Item>
         </Card>
 
+        {/* Taxonomy & Categorization Section */}
+        <Card
+          title={
+            <Space size={8}>
+              <FolderOutlined style={{ color: '#8b2626' }} />
+              <span>2. Taxonomy & Categorization</span>
+            </Space>
+          }
+          variant="borderless"
+          style={{ marginBottom: 16 }}
+          extra={
+            categoryError ? (
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                onClick={() => void loadCategories()}
+                loading={loadingCategories}
+              >
+                Retry Loading
+              </Button>
+            ) : null
+          }
+        >
+          {categoryError && (
+            <Alert
+              type="error"
+              showIcon
+              closable
+              message="Category Synchronization Failed"
+              description={
+                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                  <Typography.Text type="secondary">{categoryError}</Typography.Text>
+                  <Button
+                    size="small"
+                    type="primary"
+                    ghost
+                    icon={<ReloadOutlined />}
+                    onClick={() => void loadCategories()}
+                    loading={loadingCategories}
+                  >
+                    Retry Categories
+                  </Button>
+                </Space>
+              }
+              style={{ marginBottom: 16 }}
+              onClose={() => setCategoryError(null)}
+            />
+          )}
+
+          {!loadingCategories && !categoryError && categories.length === 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              message="No Categories Configured"
+              description="Category setup is a prerequisite before creating products. Please define Root Categories and Subcategories in Category Management before creating product catalogue entries."
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="categoryId"
+                label="Root Category"
+                rules={[
+                  { required: true, message: 'Root category is required' },
+                  {
+                    validator: async (_, value) => {
+                      if (!value) return Promise.resolve();
+                      const exists = categories.some((c) => c.id === value);
+                      if (!exists && categories.length > 0) {
+                        return Promise.reject(
+                          new Error('Selected root category does not exist in the taxonomy'),
+                        );
+                      }
+                      return Promise.resolve();
+                    },
+                  },
+                ]}
+              >
+                <Select
+                  placeholder={loadingCategories ? 'Loading categories...' : 'Select root category'}
+                  loading={loadingCategories}
+                  showSearch
+                  allowClear
+                  optionFilterProp="label"
+                  notFoundContent={
+                    loadingCategories
+                      ? 'Loading categories...'
+                      : categories.length === 0
+                        ? 'No root categories found. Category setup required.'
+                        : 'No matching categories'
+                  }
+                  onChange={() => {
+                    form.setFieldValue('subcategoryId', '');
+                  }}
+                  options={categories.map((c) => ({
+                    value: c.id,
+                    label: c.isActive ? c.name : `${c.name} (Draft only - Inactive)`,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="subcategoryId"
+                label="Subcategory"
+                extra={
+                  watchedCategoryId && selectedRootCategory && subcategories.length === 0
+                    ? 'Selected root has no subcategories. Subcategories are required.'
+                    : undefined
+                }
+                rules={[
+                  { required: true, message: 'Subcategory is required' },
+                  {
+                    validator: async (_, value) => {
+                      if (!value) return Promise.resolve();
+                      if (!watchedCategoryId) {
+                        return Promise.reject(new Error('Select a root category first'));
+                      }
+                      const valid = subcategories.some((s) => s.id === value);
+                      if (!valid) {
+                        return Promise.reject(
+                          new Error(
+                            'Selected subcategory does not belong to the selected root category',
+                          ),
+                        );
+                      }
+                      return Promise.resolve();
+                    },
+                  },
+                ]}
+              >
+                <Select
+                  placeholder={
+                    !watchedCategoryId
+                      ? 'Select root category first'
+                      : subcategories.length === 0
+                        ? 'No subcategories in this category'
+                        : 'Select subcategory'
+                  }
+                  showSearch
+                  allowClear
+                  optionFilterProp="label"
+                  disabled={!watchedCategoryId || subcategories.length === 0}
+                  notFoundContent={
+                    !watchedCategoryId
+                      ? 'Select a root category first'
+                      : subcategories.length === 0
+                        ? 'No subcategories available in selected category'
+                        : 'No matching subcategories'
+                  }
+                  options={subcategories.map((s) => ({
+                    value: s.id,
+                    label: s.isActive ? s.name : `${s.name} (Draft only - Inactive)`,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
+
         {/* SKU Governance */}
-        <Card title="SKU Governance" variant="borderless" style={{ marginBottom: 16 }}>
+        <Card
+          title={
+            <Space size={8}>
+              <BarcodeOutlined style={{ color: '#8b2626' }} />
+              <span>3. SKU Governance</span>
+            </Space>
+          }
+          variant="borderless"
+          style={{ marginBottom: 16 }}
+        >
           <Form.Item
             name="sku"
             label="Canonical SKU"
@@ -486,7 +706,12 @@ export function ProductFormDrawer({
         {/* Unit Configuration (Standalone products only) */}
         {watchedHasVariants ? (
           <Card
-            title="Unit & Quantity Configuration"
+            title={
+              <Space size={8}>
+                <ColumnWidthOutlined style={{ color: '#8b2626' }} />
+                <span>4. Unit & Quantity Configuration</span>
+              </Space>
+            }
             variant="borderless"
             style={{ marginBottom: 16 }}
           >
@@ -499,7 +724,12 @@ export function ProductFormDrawer({
           </Card>
         ) : (
           <Card
-            title="Unit & Quantity Configuration"
+            title={
+              <Space size={8}>
+                <ColumnWidthOutlined style={{ color: '#8b2626' }} />
+                <span>4. Unit & Quantity Configuration</span>
+              </Space>
+            }
             variant="borderless"
             style={{ marginBottom: 16 }}
           >
@@ -626,13 +856,35 @@ export function ProductFormDrawer({
           </Card>
         )}
 
-        {/* Image URLs */}
-        <Card title="Product Images" variant="borderless" style={{ marginBottom: 16 }}>
-          <ImageUrlManager value={images} onChange={setImages} />
+        {/* Product Media & Gallery */}
+        <Card
+          title={
+            <Space size={8}>
+              <PictureOutlined style={{ color: '#8b2626' }} />
+              <span>5. Product Media & Gallery</span>
+            </Space>
+          }
+          variant="borderless"
+          style={{ marginBottom: 16 }}
+        >
+          <ProductImageUploader
+            value={images}
+            onChange={setImages}
+            onUploadingChange={setIsUploadingImages}
+          />
         </Card>
 
         {/* Specifications */}
-        <Card title="Product Specifications" variant="borderless" style={{ marginBottom: 16 }}>
+        <Card
+          title={
+            <Space size={8}>
+              <UnorderedListOutlined style={{ color: '#8b2626' }} />
+              <span>6. Product Specifications</span>
+            </Space>
+          }
+          variant="borderless"
+          style={{ marginBottom: 16 }}
+        >
           <SpecificationEditor value={specifications} onChange={setSpecifications} />
         </Card>
       </Form>

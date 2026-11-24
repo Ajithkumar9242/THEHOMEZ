@@ -13,6 +13,7 @@ declare global {
       customerFilter?: {
         userId: string;
       };
+      adminSession?: import('../models/admin-session.model.js').IAdminSessionDocument;
     }
   }
 }

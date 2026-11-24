@@ -25,6 +25,8 @@ import { createCheckoutRouter } from './routes/checkout.routes.js';
 import { createAdminCustomerRouter } from './routes/admin-customer.routes.js';
 import { createAdminPartnerRouter } from './routes/admin-partner.routes.js';
 import { createAdminPartnerApplicationRouter } from './routes/admin-partner-application.routes.js';
+import { createAdminDashboardRouter } from './routes/admin-dashboard.routes.js';
+import { uploadRouter } from './routes/upload.routes.js';
 
 /**
  * Creates and configures the Express application.
@@ -103,6 +105,8 @@ export function createApp(): Application {
   app.use(`${config.apiPrefix}/admin/partners`, createAdminPartnerRouter());
   app.use(`${config.apiPrefix}/admin/partner-applications`, createAdminPartnerApplicationRouter());
   app.use(`${config.apiPrefix}/admin/customers`, createAdminCustomerRouter());
+  app.use(`${config.apiPrefix}/admin/dashboard`, createAdminDashboardRouter());
+  app.use(`${config.apiPrefix}/admin/uploads`, uploadRouter);
 
   // Consumer Storefront Discovery & Browsing
   app.use(`${config.apiPrefix}/storefront`, storefrontRouter);

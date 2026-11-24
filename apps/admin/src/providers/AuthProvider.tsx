@@ -97,36 +97,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [expire]);
 
-  const signIn = useCallback(
-    async (email: string, password: string) => {
-      // If loginWithPassword was explicitly mocked in tests, invoke it directly
-      if (
-        typeof (authApi.loginWithPassword as unknown as { mock?: unknown })?.mock !== 'undefined'
-      ) {
-        const verified = await authApi.loginWithPassword(email, password);
-        assertActiveStaff(verified);
-        const identity = await authApi.me();
-        completeSignIn(identity);
+  const lastActiveRef = useRef<number>(Date.now());
+  const lastHeartbeatRef = useRef<number>(Date.now());
+
+  useEffect(() => {
+    if (status !== 'signed-in') return;
+
+    lastActiveRef.current = Date.now();
+    lastHeartbeatRef.current = Date.now();
+
+    const recordInteraction = () => {
+      lastActiveRef.current = Date.now();
+    };
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach((ev) => window.addEventListener(ev, recordInteraction, { passive: true }));
+
+    // Periodic check every 15 seconds
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      const idleMs = now - lastActiveRef.current;
+
+      // 30-minute idle inactivity timeout
+      if (idleMs >= 30 * 60 * 1000) {
+        expire();
         return;
       }
 
-      try {
-        const challenge = await authApi.login(email, password);
-        return challenge;
-      } catch (err) {
-        // Fallback for development verification route if login route is unavailable
-        if (err instanceof ApiError && err.status === 404) {
-          const verified = await authApi.loginWithPassword(email, password);
-          assertActiveStaff(verified);
-          const identity = await authApi.me();
-          completeSignIn(identity);
-          return;
-        }
-        throw err;
+      // If user was active recently (< 5 mins) and it has been >= 5 mins since last heartbeat:
+      // sync activity to backend to maintain authoritative server timer
+      if (idleMs < 5 * 60 * 1000 && now - lastHeartbeatRef.current >= 5 * 60 * 1000) {
+        lastHeartbeatRef.current = now;
+        void authApi.recordActivity();
       }
-    },
-    [completeSignIn],
-  );
+    }, 15000);
+
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, recordInteraction));
+      window.clearInterval(interval);
+    };
+  }, [status, expire]);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    const challenge = await authApi.login(email, password);
+    return challenge;
+  }, []);
 
   const verifyMfa = useCallback(
     async (mfaToken: string, code: string) => {

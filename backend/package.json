@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@thehomez/shared-types": "*",
+    "@types/multer": "^2.3.0",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -25,6 +27,7 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.8.0",
+    "multer": "^2.5.0",
     "pino": "^9.5.0",
     "zod": "^4.6.7"
   },

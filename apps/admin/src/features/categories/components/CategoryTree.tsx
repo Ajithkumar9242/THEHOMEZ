@@ -6,8 +6,11 @@ import { CategoryStatus } from './CategoryStatus.js';
 
 function matches(
   query: string,
-  category: { name: string; slug: string; description?: string },
+  category: { name: string; slug: string; description?: string; isActive?: boolean },
+  statusFilter?: 'ALL' | 'ACTIVE' | 'INACTIVE',
 ): boolean {
+  if (statusFilter === 'ACTIVE' && !category.isActive) return false;
+  if (statusFilter === 'INACTIVE' && category.isActive) return false;
   const value = query.trim().toLocaleLowerCase();
   return (
     !value ||
@@ -65,17 +68,19 @@ export function buildCategoryTree(
   categories: ICategoryTreeItem[],
   query = '',
   options?: {
+    statusFilter?: 'ALL' | 'ACTIVE' | 'INACTIVE';
     canWrite?: boolean;
     onAddSubcategory?: (root: ICategoryTreeItem) => void;
     onEdit?: (cat: ICategoryTreeItem | ICategorySubcategoryItem) => void;
     onDelete?: (cat: ICategoryTreeItem | ICategorySubcategoryItem) => void;
   },
 ): DataNode[] {
+  const statusFilter = options?.statusFilter || 'ALL';
   return categories.flatMap((category) => {
     const children = category.subcategories
-      .filter((child) => matches(query, child))
+      .filter((child) => matches(query, child, statusFilter))
       .map((child) => childNode(child, options));
-    if (!matches(query, category) && children.length === 0) return [];
+    if (!matches(query, category, statusFilter) && children.length === 0) return [];
     const isLeaf = category.subcategories.length === 0;
     return [
       {
@@ -133,6 +138,7 @@ export function buildCategoryTree(
 export interface CategoryTreeProps {
   categories: ICategoryTreeItem[];
   search: string;
+  statusFilter?: 'ALL' | 'ACTIVE' | 'INACTIVE';
   selectedId?: string;
   onSelect: (categoryId: string) => void;
   canWrite?: boolean;
@@ -144,6 +150,7 @@ export interface CategoryTreeProps {
 export function CategoryTree({
   categories,
   search,
+  statusFilter = 'ALL',
   selectedId,
   onSelect,
   canWrite = false,
@@ -152,6 +159,7 @@ export function CategoryTree({
   onDelete,
 }: CategoryTreeProps) {
   const treeData = buildCategoryTree(categories, search, {
+    statusFilter,
     canWrite,
     onAddSubcategory,
     onEdit,

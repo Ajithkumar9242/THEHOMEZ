@@ -1,5 +1,11 @@
 import { Button, Card, Descriptions, Empty, Space, Typography } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  CloseOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  ExportOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import type { ICategoryDetailsResponse, ICategorySubcategoryItem } from '@thehomez/shared-types';
 import { CategoryStatus } from './CategoryStatus.js';
 
@@ -11,6 +17,8 @@ export interface CategoryDetailsProps {
   onAddSubcategory?: () => void;
   onEditChild?: (child: ICategorySubcategoryItem) => void;
   onDeleteChild?: (child: ICategorySubcategoryItem) => void;
+  onClose?: () => void;
+  onViewPage?: () => void;
 }
 
 export function CategoryDetails({
@@ -21,6 +29,8 @@ export function CategoryDetails({
   onAddSubcategory,
   onEditChild,
   onDeleteChild,
+  onClose,
+  onViewPage,
 }: CategoryDetailsProps) {
   if (!details)
     return (
@@ -45,23 +55,38 @@ export function CategoryDetails({
         </Space>
       }
       extra={
-        canWrite && (
-          <Space>
-            {category.level === 0 && (
-              <Button type="primary" icon={<PlusOutlined />} onClick={onAddSubcategory}>
-                Add subcategory
-              </Button>
-            )}
-            <Button icon={<EditOutlined />} onClick={onEdit}>
-              Edit
+        <Space>
+          {onViewPage && (
+            <Button size="small" icon={<ExportOutlined />} onClick={onViewPage}>
+              Full page
             </Button>
-            {isLeaf && (
-              <Button danger icon={<DeleteOutlined />} onClick={onDelete}>
-                Delete
+          )}
+          {canWrite && (
+            <>
+              {category.level === 0 && (
+                <Button type="primary" icon={<PlusOutlined />} onClick={onAddSubcategory}>
+                  Add subcategory
+                </Button>
+              )}
+              <Button icon={<EditOutlined />} onClick={onEdit}>
+                Edit
               </Button>
-            )}
-          </Space>
-        )
+              {isLeaf && (
+                <Button danger icon={<DeleteOutlined />} onClick={onDelete}>
+                  Delete
+                </Button>
+              )}
+            </>
+          )}
+          {onClose && (
+            <Button
+              type="text"
+              icon={<CloseOutlined />}
+              onClick={onClose}
+              aria-label="Close inspector"
+            />
+          )}
+        </Space>
       }
     >
       <Descriptions column={{ xs: 1, sm: 1, md: 2 }} size="small">

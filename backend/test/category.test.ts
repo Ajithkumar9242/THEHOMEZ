@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import mongoose from 'mongoose';
 import { createApp } from '../src/app.js';
@@ -11,7 +11,7 @@ import { TokenService } from '../src/services/token/token.service.js';
 import { UserType, UserStatus, PermissionCode } from '@thehomez/shared-types';
 import type { Application } from 'express';
 import { runCategoriesSeed } from '../src/seeds/categories.seed.js';
-import { registerTestFixture } from '../src/database/test-guard.js';
+import { registerTestFixture, getRegisteredFixtureIds } from '../src/database/test-guard.js';
 
 describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', () => {
   let app: Application;
@@ -52,17 +52,27 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
 
     if (isDbConnected) {
       CategoryModel.schema.post('save', function (doc: any) {
-        if (doc && doc._id) createdCategoryIds.push(doc._id);
+        if (doc && doc._id) {
+          createdCategoryIds.push(doc._id);
+          registerTestFixture('Category', doc._id);
+          registerTestFixture('categories', doc._id);
+        }
       });
     }
   });
 
   afterAll(async () => {
     if (isDbConnected) {
-      if (createdCategoryIds.length > 0) {
-        const catIds = [...createdCategoryIds];
-        createdCategoryIds.length = 0;
-        await CategoryModel.deleteMany({ _id: { $in: catIds } });
+      const registeredCatIds = getRegisteredFixtureIds('Category');
+      const allCatIds = Array.from(
+        new Set([
+          ...createdCategoryIds.map((id) => id.toString()),
+          ...registeredCatIds.map((id) => id.toString()),
+        ]),
+      ).map((id) => new mongoose.Types.ObjectId(id));
+      createdCategoryIds.length = 0;
+      if (allCatIds.length > 0) {
+        await CategoryModel.deleteMany({ _id: { $in: allCatIds } });
       }
       if (createdUserIds.length > 0) {
         const userIds = [...createdUserIds];
@@ -85,11 +95,38 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
 
   beforeEach(async () => {
     if (isDbConnected) {
-      if (createdCategoryIds.length > 0) {
-        const catIds = [...createdCategoryIds];
-        createdCategoryIds.length = 0;
-        await CategoryModel.deleteMany({ _id: { $in: catIds } });
+      const registeredCatIds = getRegisteredFixtureIds('Category');
+      const allCatIds = Array.from(
+        new Set([
+          ...createdCategoryIds.map((id) => id.toString()),
+          ...registeredCatIds.map((id) => id.toString()),
+        ]),
+      ).map((id) => new mongoose.Types.ObjectId(id));
+      createdCategoryIds.length = 0;
+      if (allCatIds.length > 0) {
+        await CategoryModel.deleteMany({ _id: { $in: allCatIds } });
       }
+
+      // Mock Admin Session verification and activity tracking for staff auth (C-12.3)
+      vi.spyOn(TokenService.prototype, 'validateAdminSession').mockImplementation(
+        async (sessionId: string) => {
+          let matchedUserId = catalogAdminUser?._id;
+          if (sessionId === 'session-cat-ro') matchedUserId = catalogReadOnlyUser?._id;
+          if (sessionId === 'session-cat-unauth') matchedUserId = unauthorizedUser?._id;
+          return {
+            _id: sessionId,
+            sessionId,
+            userId: matchedUserId,
+            status: 'ACTIVE',
+            lastActivityAt: new Date(),
+            absoluteExpiresAt: new Date(Date.now() + 86400000),
+            isAbsoluteExpired: () => false,
+            isIdleExpired: () => false,
+            isActive: () => true,
+          } as any;
+        },
+      );
+      vi.spyOn(TokenService.prototype, 'recordAdminActivity').mockResolvedValue();
 
       // 1. Catalog Manager (CATALOG_WRITE + CATALOG_READ)
       const role1 = await RoleModel.findOneAndUpdate(
@@ -122,7 +159,7 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         createdUserIds.push(catalogAdminUser._id);
         registerTestFixture('User', catalogAdminUser._id);
       }
-      catalogAdminToken = tokenService.signAccessToken(catalogAdminUser);
+      catalogAdminToken = tokenService.signAccessToken(catalogAdminUser, 'session-cat-admin');
 
       // 2. Catalog Read Only (CATALOG_READ only)
       const role2 = await RoleModel.findOneAndUpdate(
@@ -155,7 +192,7 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         createdUserIds.push(catalogReadOnlyUser._id);
         registerTestFixture('User', catalogReadOnlyUser._id);
       }
-      catalogReadOnlyToken = tokenService.signAccessToken(catalogReadOnlyUser);
+      catalogReadOnlyToken = tokenService.signAccessToken(catalogReadOnlyUser, 'session-cat-ro');
 
       // 3. Unauthorized Staff User (lacks catalog permissions)
       const role3 = await RoleModel.findOneAndUpdate(
@@ -188,7 +225,7 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         createdUserIds.push(unauthorizedUser._id);
         registerTestFixture('User', unauthorizedUser._id);
       }
-      unauthorizedToken = tokenService.signAccessToken(unauthorizedUser);
+      unauthorizedToken = tokenService.signAccessToken(unauthorizedUser, 'session-cat-unauth');
 
       // 4. Customer User
       customerUser = (await UserModel.findOneAndUpdate(
@@ -697,13 +734,17 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
         displayOrder: 99,
       });
 
-      await CategoryModel.create({
+      const inactiveChild = await CategoryModel.create({
         slug: 'test-visibility-matrix-child',
         name: 'Visibility Child',
         parentId: inactiveRoot._id,
         isActive: true,
         displayOrder: 1,
       });
+
+      createdCategoryIds.push(inactiveRoot._id, inactiveChild._id);
+      registerTestFixture('Category', inactiveRoot._id);
+      registerTestFixture('Category', inactiveChild._id);
     });
 
     it('anonymous users CANNOT retrieve inactive categories using includeInactive=true', async () => {
@@ -883,6 +924,47 @@ describe('Milestone 4 Step 2: Product Taxonomy — Categories & Subcategories', 
       expect(updateRes.status).toBe(200);
       expect(updateRes.body.data.category.name).toBe('Updated Authorized Flow');
       expect(updateRes.body.data.category.displayOrder).toBe(10);
+    });
+
+    it('customer identity is rejected with HTTP 403 by staffOnlyGuard on category mutation', async () => {
+      const res = await request(app)
+        .post('/api/v1/categories')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({
+          slug: 'test-customer-cat',
+          name: 'Customer Category',
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    });
+
+    it('partner identity is rejected with HTTP 403 by staffOnlyGuard on category mutation', async () => {
+      const res = await request(app)
+        .patch('/api/v1/categories/60c72b2f9b1d8b001f8e4caa')
+        .set('Authorization', `Bearer ${partnerToken}`)
+        .send({
+          name: 'Partner Renamed Category',
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    });
+
+    it('rejects malformed category id with HTTP 400 VALIDATION_ERROR via validateParams', async () => {
+      const res1 = await request(app)
+        .get('/api/v1/categories/id/invalid-not-an-objectid')
+        .set('Authorization', `Bearer ${catalogReadOnlyToken}`);
+
+      expect(res1.status).toBe(400);
+      expect(res1.body.error.code).toBe('VALIDATION_ERROR');
+
+      const res2 = await request(app)
+        .delete('/api/v1/categories/invalid-not-an-objectid')
+        .set('Authorization', `Bearer ${catalogAdminToken}`);
+
+      expect(res2.status).toBe(400);
+      expect(res2.body.error.code).toBe('VALIDATION_ERROR');
     });
   });
 

@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import { PermissionCode } from '@thehomez/shared-types';
-import { authenticate, optionalAuthenticate, authorize } from '../middleware/auth.middleware.js';
+import {
+  authenticate,
+  optionalAuthenticate,
+  authorize,
+  staffOnlyGuard,
+} from '../middleware/auth.middleware.js';
 import { validateBody, validateQuery, validateParams } from '../middleware/validate.middleware.js';
 import { unitController } from '../controllers/unit.controller.js';
 import {
@@ -69,6 +74,7 @@ unitRouter.get('/:code', validateParams(unitCodeParamSchema), (req, res, next) =
 unitRouter.patch(
   '/:code',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
   validateParams(unitCodeParamSchema),
   validateBody(updateUnitSchema),

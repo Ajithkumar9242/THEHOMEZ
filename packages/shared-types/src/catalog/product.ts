@@ -110,3 +110,15 @@ export interface IPublicProductQueryDto {
   brand?: string;
   search?: string;
 }
+
+/**
+ * Response DTO for product image upload (Cloudinary)
+ */
+export interface IProductImageUploadResponse {
+  url: string;
+  publicId: string;
+  format?: string;
+  width?: number;
+  height?: number;
+  bytes?: number;
+}

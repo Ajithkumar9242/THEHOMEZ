@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PermissionCode, UserStatus, UserType, type IAuthUser } from '@thehomez/shared-types';
@@ -64,11 +64,37 @@ afterEach(() => {
   });
 });
 
-describe('Admin temporary email/password authentication UI', () => {
-  it('signs in, validates the backend identity and reaches the protected route', async () => {
+describe('Admin MFA authentication UI & fallback absence', () => {
+  it('normal login proceeds to MFA challenge and does not grant direct session access', async () => {
     vi.spyOn(authApi, 'refresh').mockResolvedValue(null);
-    vi.spyOn(authApi, 'loginWithPassword').mockResolvedValue(staff);
-    vi.spyOn(authApi, 'me').mockResolvedValue(staff);
+    vi.spyOn(authApi, 'login').mockResolvedValue({
+      mfaRequired: true,
+      mfaEnrolled: true,
+      mfaToken: 'test-mfa-token',
+      message: 'TOTP required',
+    });
+
+    render(<TestApp />);
+    fireEvent.change(await screen.findByLabelText('Admin email'), {
+      target: { value: 'admin@example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Admin password'), {
+      target: { value: 'secure-admin-pass-123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Two-step verification' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Protected home')).not.toBeInTheDocument();
+  });
+
+  it('no password-only fallback occurs if the MFA login endpoint returns 404', async () => {
+    vi.spyOn(authApi, 'refresh').mockResolvedValue(null);
+    vi.spyOn(authApi, 'login').mockRejectedValue(
+      new ApiError('Endpoint not found', 404, 'NOT_FOUND'),
+    );
+    const fallbackSpy = vi.spyOn(authApi, 'loginWithPassword');
 
     render(<TestApp />);
     fireEvent.change(await screen.findByLabelText('Admin email'), {
@@ -79,17 +105,14 @@ describe('Admin temporary email/password authentication UI', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
-    expect(await screen.findByText('Protected home')).toBeInTheDocument();
-    expect(authApi.loginWithPassword).toHaveBeenCalledWith(
-      'admin@example.test',
-      'development-test-password',
-    );
-    expect(authApi.me).toHaveBeenCalledOnce();
+    expect(await screen.findByText('Endpoint not found')).toBeInTheDocument();
+    expect(screen.queryByText('Protected home')).not.toBeInTheDocument();
+    expect(fallbackSpy).not.toHaveBeenCalled();
   });
 
   it('shows a generic sign-in failure without entering the protected route', async () => {
     vi.spyOn(authApi, 'refresh').mockResolvedValue(null);
-    vi.spyOn(authApi, 'loginWithPassword').mockRejectedValue(
+    vi.spyOn(authApi, 'login').mockRejectedValue(
       new ApiError('Invalid email or password.', 401, 'INVALID_CREDENTIALS'),
     );
 
@@ -104,6 +127,40 @@ describe('Admin temporary email/password authentication UI', () => {
 
     expect(await screen.findByText('Invalid email or password.')).toBeInTheDocument();
     expect(screen.queryByText('Protected catalogue')).not.toBeInTheDocument();
+  });
+
+  it('displays an appropriate error when invalid MFA code is submitted', async () => {
+    vi.spyOn(authApi, 'refresh').mockResolvedValue(null);
+    vi.spyOn(authApi, 'login').mockResolvedValue({
+      mfaRequired: true,
+      mfaEnrolled: true,
+      mfaToken: 'test-verify-mfa-token',
+      message: 'TOTP required',
+    });
+    vi.spyOn(authApi, 'mfaVerify').mockRejectedValue(
+      new ApiError('Invalid or expired authentication code.', 401, 'INVALID_MFA_CODE'),
+    );
+
+    render(<TestApp />);
+    fireEvent.change(await screen.findByLabelText('Admin email'), {
+      target: { value: 'admin@example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Admin password'), {
+      target: { value: 'secure-admin-pass-123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Two-step verification' }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('TOTP code'), {
+      target: { value: '000000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+
+    expect(await screen.findByText('Invalid or expired authentication code.')).toBeInTheDocument();
+    expect(screen.queryByText('Protected home')).not.toBeInTheDocument();
   });
 
   it('restores an existing cookie session and enforces the route permission', async () => {
@@ -211,7 +268,9 @@ describe('Admin temporary email/password authentication UI', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
     // User should see the Two-step verification screen
-    expect(await screen.findByRole('heading', { name: 'Two-step verification' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Two-step verification' }),
+    ).toBeInTheDocument();
 
     // User enters 6-digit TOTP code
     fireEvent.change(screen.getByLabelText('TOTP code'), {
@@ -243,7 +302,9 @@ describe('Admin temporary email/password authentication UI', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
-    expect(await screen.findByRole('heading', { name: 'Two-step verification' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Two-step verification' }),
+    ).toBeInTheDocument();
 
     // Toggle to backup code
     fireEvent.click(screen.getByRole('button', { name: 'Lost access? Use a backup code' }));
@@ -256,5 +317,54 @@ describe('Admin temporary email/password authentication UI', () => {
 
     expect(await screen.findByText('Protected home')).toBeInTheDocument();
     expect(authApi.mfaVerifyBackup).toHaveBeenCalledWith('test-backup-mfa-token', 'code1-11111');
+  });
+
+  it('13. clears authentication state when frontend idle timeout is reached', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.spyOn(authApi, 'refresh').mockResolvedValue('valid-token');
+    vi.spyOn(authApi, 'me').mockResolvedValue(staff);
+
+    render(<TestApp initialPath="/" />);
+
+    expect(await screen.findByText('Protected home')).toBeInTheDocument();
+
+    // Advance 30 minutes of inactivity
+    act(() => {
+      vi.advanceTimersByTime(30 * 60 * 1000 + 20000);
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Admin sign in' })).toBeInTheDocument();
+    expect(screen.queryByText('Protected home')).not.toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
+  it('background heartbeat is suppressed during unattended idle periods and does not keep session alive', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.spyOn(authApi, 'refresh').mockResolvedValue('valid-token');
+    vi.spyOn(authApi, 'me').mockResolvedValue(staff);
+    const activitySpy = vi.spyOn(authApi, 'recordActivity').mockResolvedValue(undefined);
+
+    render(<TestApp initialPath="/" />);
+
+    expect(await screen.findByText('Protected home')).toBeInTheDocument();
+
+    // Advance 6 minutes without user interaction
+    act(() => {
+      vi.advanceTimersByTime(6 * 60 * 1000);
+    });
+
+    // Unattended session must NOT dispatch heartbeat
+    expect(activitySpy).not.toHaveBeenCalled();
+
+    // Advance to 30 minutes total inactivity
+    act(() => {
+      vi.advanceTimersByTime(25 * 60 * 1000);
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Admin sign in' })).toBeInTheDocument();
+    expect(screen.queryByText('Protected home')).not.toBeInTheDocument();
+
+    vi.useRealTimers();
   });
 });

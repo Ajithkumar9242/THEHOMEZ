@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import { PermissionCode, UserType } from '@thehomez/shared-types';
-import { authenticate, authorize, partnerTenantGuard } from '../middleware/auth.middleware.js';
+import {
+  authenticate,
+  authorize,
+  partnerTenantGuard,
+  staffOnlyGuard,
+} from '../middleware/auth.middleware.js';
 import { validateBody } from '../middleware/validate.middleware.js';
 import { serviceAreaController } from '../controllers/service-area.controller.js';
 import { assignPartnerServiceAreasSchema } from './service-area.schemas.js';
@@ -14,6 +19,7 @@ export const partnerRouter: Router = Router();
 partnerRouter.put(
   '/:partnerId/service-areas',
   authenticate,
+  staffOnlyGuard,
   authorize(
     [
       PermissionCode.SERVICE_AREA_WRITE,

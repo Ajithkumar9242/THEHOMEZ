@@ -15,7 +15,8 @@ export function ProtectedRoute({ permission }: { permission?: PermissionCode }) 
   if (status !== 'signed-in' || !user)
     return <Navigate to="/sign-in" replace state={{ from: location.pathname }} />;
   if (user.userType !== UserType.STAFF) return <Navigate to="/sign-in" replace />;
-  if (permission && !user.permissions.includes(permission)) {
+  const isSuperAdmin = user.roles?.includes('SUPER_ADMIN');
+  if (permission && !isSuperAdmin && !user.permissions.includes(permission)) {
     return (
       <Result
         status="403"

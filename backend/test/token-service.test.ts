@@ -34,6 +34,14 @@ describe('TokenService — JWT & Refresh Token Lifecycle with Reuse Detection', 
         status: UserStatus.ACTIVE,
         roles: ['CUSTOMER_DEFAULT'],
       });
+    } else {
+      testUser = {
+        _id: new mongoose.Types.ObjectId('507f191e810c19729de860eb'),
+        phone: '+919888877777',
+        userType: UserType.CUSTOMER,
+        status: UserStatus.ACTIVE,
+        roles: ['CUSTOMER_DEFAULT'],
+      } as any;
     }
   });
 

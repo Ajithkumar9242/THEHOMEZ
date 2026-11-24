@@ -1,9 +1,19 @@
 import { Router } from 'express';
 import { PermissionCode } from '@thehomez/shared-types';
-import { authenticate, optionalAuthenticate, authorize } from '../middleware/auth.middleware.js';
-import { validateBody } from '../middleware/validate.middleware.js';
+import {
+  authenticate,
+  optionalAuthenticate,
+  authorize,
+  staffOnlyGuard,
+} from '../middleware/auth.middleware.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validate.middleware.js';
 import { categoryController } from '../controllers/category.controller.js';
-import { createCategorySchema, updateCategorySchema } from './category.schemas.js';
+import {
+  createCategorySchema,
+  updateCategorySchema,
+  categoryIdParamSchema,
+  listCategoriesQuerySchema,
+} from './category.schemas.js';
 
 export const categoryRouter: Router = Router();
 
@@ -14,8 +24,11 @@ export const categoryRouter: Router = Router();
  * Query options:
  * - includeInactive=true (requires authenticated staff with CATALOG_READ)
  */
-categoryRouter.get('/', optionalAuthenticate, (req, res, next) =>
-  categoryController.getCategoryTree(req, res, next),
+categoryRouter.get(
+  '/',
+  optionalAuthenticate,
+  validateQuery(listCategoriesQuerySchema),
+  (req, res, next) => categoryController.getCategoryTree(req, res, next),
 );
 
 /**
@@ -33,7 +46,9 @@ categoryRouter.get('/:slug', optionalAuthenticate, (req, res, next) =>
 categoryRouter.get(
   '/id/:id',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_READ),
+  validateParams(categoryIdParamSchema),
   (req, res, next) => categoryController.getCategoryById(req, res, next),
 );
 
@@ -44,6 +59,7 @@ categoryRouter.get(
 categoryRouter.post(
   '/',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
   validateBody(createCategorySchema),
   (req, res, next) => categoryController.createCategory(req, res, next),
@@ -56,18 +72,22 @@ categoryRouter.post(
 categoryRouter.patch(
   '/:id',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
+  validateParams(categoryIdParamSchema),
   validateBody(updateCategorySchema),
   (req, res, next) => categoryController.updateCategory(req, res, next),
 );
 
 /**
- * Administrative: Delete a category (only if it has no child subcategories).
+ * Administrative: Delete a category (only if it has no child subcategories and no products).
  * DELETE /api/v1/categories/:id
  */
 categoryRouter.delete(
   '/:id',
   authenticate,
+  staffOnlyGuard,
   authorize(PermissionCode.CATALOG_WRITE),
+  validateParams(categoryIdParamSchema),
   (req, res, next) => categoryController.deleteCategory(req, res, next),
 );
