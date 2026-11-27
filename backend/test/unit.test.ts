@@ -332,24 +332,121 @@ describe('Milestone 4 Step 4: Construction Units, Quantity Rules & Validation Go
     expect(count).toBe(9);
   });
 
-  it('AC-UNIT-02: Deferred Custom Unit Creation Gate', async () => {
-    const res = await request(app)
-      .post('/api/v1/units')
-      .set('Authorization', `Bearer ${catalogPublisherToken}`)
-      .send({
-        code: 'YARD',
-        name: 'Cubic Yard',
-        symbol: 'yd3',
-        singularLabel: 'Yard',
-        pluralLabel: 'Yards',
-        classification: 'VOLUME',
-        isDiscrete: false,
-        allowedMaxPrecision: 2,
-      });
+  describe('AC-UNIT-02: Administrative Custom Unit Creation & Discovery Governance', () => {
+    it('AC-UNIT-02.1: Successfully creates custom unit with valid configuration and isSystem=false', async () => {
+      const res = await request(app)
+        .post('/api/v1/units')
+        .set('Authorization', `Bearer ${catalogWriterToken}`)
+        .send({
+          code: 'YARD',
+          name: 'Cubic Yard',
+          symbol: 'yd3',
+          singularLabel: 'Yard',
+          pluralLabel: 'Yards',
+          description: 'Cubic yards for aggregates and concrete',
+          classification: 'VOLUME',
+          isDiscrete: false,
+          allowedMaxPrecision: 2,
+        });
 
-    // Custom unit creation deferred -> route not mounted
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('ROUTE_NOT_FOUND');
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.code).toBe('YARD');
+      expect(res.body.data.name).toBe('Cubic Yard');
+      expect(res.body.data.symbol).toBe('yd3');
+      expect(res.body.data.singularLabel).toBe('Yard');
+      expect(res.body.data.pluralLabel).toBe('Yards');
+      expect(res.body.data.classification).toBe('VOLUME');
+      expect(res.body.data.isDiscrete).toBe(false);
+      expect(res.body.data.allowedMaxPrecision).toBe(2);
+      expect(res.body.data.isSystem).toBe(false);
+      expect(res.body.data.isActive).toBe(true);
+
+      const dbDoc = await UnitModel.findOne({ code: 'YARD' });
+      expect(dbDoc).not.toBeNull();
+      expect(dbDoc?.isSystem).toBe(false);
+      if (dbDoc && !createdUnitIds.some((id) => id.equals(dbDoc._id))) {
+        createdUnitIds.push(dbDoc._id);
+      }
+    });
+
+    it('AC-UNIT-02.2: Rejects duplicate unit code with 409 Conflict', async () => {
+      const res = await request(app)
+        .post('/api/v1/units')
+        .set('Authorization', `Bearer ${catalogWriterToken}`)
+        .send({
+          code: 'YARD',
+          name: 'Another Yard',
+          symbol: 'yd',
+          singularLabel: 'Yard',
+          pluralLabel: 'Yards',
+          classification: 'VOLUME',
+          isDiscrete: false,
+          allowedMaxPrecision: 2,
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('UNIT_CODE_ALREADY_EXISTS');
+    });
+
+    it('AC-UNIT-02.3: Rejects discrete unit with decimal precision > 0', async () => {
+      const res = await request(app)
+        .post('/api/v1/units')
+        .set('Authorization', `Bearer ${catalogWriterToken}`)
+        .send({
+          code: 'CARTON',
+          name: 'Carton',
+          symbol: 'ctn',
+          singularLabel: 'Carton',
+          pluralLabel: 'Cartons',
+          classification: 'COUNT',
+          isDiscrete: true,
+          allowedMaxPrecision: 2,
+        });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('AC-UNIT-02.4: Enforces RBAC permissions on unit creation', async () => {
+      // 401 Unauthenticated
+      const unauthRes = await request(app).post('/api/v1/units').send({
+        code: 'TEST_RBAC',
+        name: 'Test',
+        symbol: 'tst',
+        singularLabel: 'Test',
+        pluralLabel: 'Tests',
+        classification: 'COUNT',
+        isDiscrete: true,
+        allowedMaxPrecision: 0,
+      });
+      expect(unauthRes.status).toBe(401);
+
+      // 403 Forbidden without CATALOG_WRITE
+      const forbiddenRes = await request(app)
+        .post('/api/v1/units')
+        .set('Authorization', `Bearer ${catalogReadOnlyToken}`)
+        .send({
+          code: 'TEST_RBAC',
+          name: 'Test',
+          symbol: 'tst',
+          singularLabel: 'Test',
+          pluralLabel: 'Tests',
+          classification: 'COUNT',
+          isDiscrete: true,
+          allowedMaxPrecision: 0,
+        });
+      expect(forbiddenRes.status).toBe(403);
+    });
+
+    it('AC-UNIT-02.5: Supports search filtering by code, name, and symbol', async () => {
+      const searchRes = await request(app)
+        .get('/api/v1/units?search=YARD')
+        .set('Authorization', `Bearer ${catalogReadOnlyToken}`);
+
+      expect(searchRes.status).toBe(200);
+      expect(searchRes.body.success).toBe(true);
+      expect(searchRes.body.data.some((u: { code: string }) => u.code === 'YARD')).toBe(true);
+    });
   });
 
   it('AC-UNIT-03: Unit Master Metadata Update', async () => {

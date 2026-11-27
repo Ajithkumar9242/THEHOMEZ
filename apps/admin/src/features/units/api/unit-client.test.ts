@@ -42,4 +42,60 @@ describe('unit client', () => {
         ),
     ).toBe(true);
   });
+
+  it('supports search query parameter in list', async () => {
+    vi.mocked(apiRequest).mockResolvedValue([]);
+    await unitClient.list({ search: 'YARD', activeOnly: true });
+    expect(apiRequest).toHaveBeenCalledWith('/units?activeOnly=true&search=YARD', {
+      method: 'GET',
+      signal: undefined,
+    });
+  });
+
+  it('posts payload to /units on create', async () => {
+    const payload = {
+      code: 'YARD',
+      name: 'Cubic Yard',
+      symbol: 'yd3',
+      singularLabel: 'Yard',
+      pluralLabel: 'Yards',
+      classification: 'VOLUME' as const,
+      isDiscrete: false,
+      allowedMaxPrecision: 2,
+    };
+    vi.mocked(apiRequest).mockResolvedValue({ ...payload, id: 'u1', isActive: true, isSystem: false, createdAt: '', updatedAt: '' });
+    await unitClient.create(payload);
+    expect(apiRequest).toHaveBeenCalledWith('/units', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  });
+
+  it('patches /units/:code on update', async () => {
+    const payload = { name: 'Updated Yard' };
+    vi.mocked(apiRequest).mockResolvedValue({ code: 'YARD', name: 'Updated Yard' });
+    await unitClient.update('YARD', payload);
+    expect(apiRequest).toHaveBeenCalledWith('/units/YARD', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  });
+
+  it('calls updateStatus to toggle unit active status', async () => {
+    vi.mocked(apiRequest).mockResolvedValue({ code: 'YARD', isActive: false });
+    await unitClient.updateStatus('YARD', false);
+    expect(apiRequest).toHaveBeenCalledWith('/units/YARD', {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive: false }),
+    });
+  });
+
+  it('calls /units/conversions on listConversions', async () => {
+    vi.mocked(apiRequest).mockResolvedValue([]);
+    await unitClient.listConversions();
+    expect(apiRequest).toHaveBeenCalledWith('/units/conversions', {
+      method: 'GET',
+      signal: undefined,
+    });
+  });
 });

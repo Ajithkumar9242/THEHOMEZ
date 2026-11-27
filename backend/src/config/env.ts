@@ -1,8 +1,16 @@
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
-// Load .env file if present
+// Load .env file from cwd and backend package directory
 dotenv.config();
+try {
+  const backendEnvPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../.env');
+  dotenv.config({ path: backendEnvPath });
+} catch {
+  // Ignore in bundled / non-file environments
+}
 
 const durationRegex = /^(\d+)(s|m|h|d)$/;
 

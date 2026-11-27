@@ -16,6 +16,16 @@ const upload = multer({
   },
 });
 
+export const KYC_DOCUMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const documentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: KYC_DOCUMENT_MAX_SIZE_BYTES,
+    files: 1,
+  },
+});
+
 /**
  * Custom error handler for Multer upload issues (e.g. file size exceeded)
  */
@@ -29,6 +39,38 @@ function handleMulterUpload(req: Request, res: Response, next: NextFunction) {
             error: {
               code: 'FILE_TOO_LARGE',
               message: `Image exceeds maximum allowed size of 5 MB`,
+            },
+          });
+          return;
+        }
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'UPLOAD_ERROR',
+            message: err.message,
+          },
+        });
+        return;
+      }
+      return next(err);
+    }
+    next();
+  });
+}
+
+/**
+ * Custom error handler for KYC document upload (10 MB limit)
+ */
+function handleMulterDocumentUpload(req: Request, res: Response, next: NextFunction) {
+  documentUpload.single('file')(req, res, (err: unknown) => {
+    if (err) {
+      if (err instanceof MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          res.status(400).json({
+            success: false,
+            error: {
+              code: 'FILE_TOO_LARGE',
+              message: 'Document exceeds maximum allowed size of 10 MB',
             },
           });
           return;
@@ -72,3 +114,18 @@ uploadRouter.delete(
   authorize(PermissionCode.CATALOG_WRITE),
   (req, res, next) => uploadController.deleteProductImage(req, res, next),
 );
+
+/**
+ * POST /api/v1/admin/uploads/document
+ * Authenticated staff only, requires PARTNER_WRITE.
+ * Accepts multipart form with file (<=10 MB), partnerId, and documentType.
+ */
+uploadRouter.post(
+  '/document',
+  authenticate,
+  staffOnlyGuard,
+  authorize(PermissionCode.PARTNER_WRITE),
+  handleMulterDocumentUpload,
+  (req, res, next) => uploadController.uploadPartnerDocument(req, res, next),
+);
+

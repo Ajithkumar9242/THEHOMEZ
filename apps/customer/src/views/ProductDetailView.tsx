@@ -136,7 +136,7 @@ export const ProductDetailView: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px 0' }}>
+      <div className="thz-pdp-loading">
         <div className="thz-skeleton-card" style={{ height: '400px' }} />
       </div>
     );
@@ -273,18 +273,21 @@ export const ProductDetailView: React.FC = () => {
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
               />
             ) : (
-              <div style={{ textAlign: 'center', color: 'var(--thz-text-secondary)' }}>
-                <span style={{ fontSize: '3rem' }}>🏗️</span>
-                <p style={{ fontWeight: 600, marginTop: '8px' }}>{product.brand}</p>
-                <p style={{ fontSize: '0.8rem' }}>Structural Grade Material</p>
+              <div className="thz-card-image-placeholder" style={{ height: '320px', borderRadius: 'var(--thz-radius-md)', color: 'var(--thz-text-secondary)' }}>
+                <div className="thz-placeholder-blueprint" aria-hidden="true" />
+                <div className="thz-placeholder-content">
+                  <span className="thz-placeholder-cat">{product.category?.name || 'MATERIALS'}</span>
+                  <span className="thz-placeholder-brand" style={{ fontSize: '1.25rem' }}>{product.brand || 'THEHOMEZ'}</span>
+                  <span className="thz-placeholder-spec">MTC · WEIGHBRIDGE VERIFIED BATCH</span>
+                </div>
               </div>
             )}
           </div>
 
           {/* Technical Specifications Table */}
           {product.specifications && Object.keys(product.specifications).length > 0 && (
-            <div style={{ marginTop: '24px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '8px' }}>
+            <div className="thz-pdp-specs-box">
+              <h3 className="thz-pdp-specs-title">
                 Technical Specifications
               </h3>
               <table className="thz-specs-table">
@@ -353,14 +356,7 @@ export const ProductDetailView: React.FC = () => {
 
           {/* Active Pricing Display */}
           {activePricing ? (
-            <div
-              style={{
-                padding: '16px',
-                backgroundColor: 'var(--thz-white)',
-                border: '1px solid var(--thz-border-subtle)',
-                borderRadius: '8px',
-              }}
-            >
+            <div className="thz-pdp-price-box">
               <div
                 style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '8px' }}
               >
@@ -395,7 +391,22 @@ export const ProductDetailView: React.FC = () => {
                     fontWeight: 600,
                   }}
                 >
-                  🏢 Verified B2B Trade Rate (Excl. GST)
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="4" y="2" width="16" height="20" rx="2" />
+                      <line x1="9" y1="22" x2="9" y2="22.01" />
+                      <line x1="15" y1="22" x2="15" y2="22.01" />
+                      <line x1="9" y1="6" x2="9" y2="6.01" />
+                      <line x1="15" y1="6" x2="15" y2="6.01" />
+                      <line x1="9" y1="10" x2="9" y2="10.01" />
+                      <line x1="15" y1="10" x2="15" y2="10.01" />
+                      <line x1="9" y1="14" x2="9" y2="14.01" />
+                      <line x1="15" y1="14" x2="15" y2="14.01" />
+                      <line x1="9" y1="18" x2="9" y2="18.01" />
+                      <line x1="15" y1="18" x2="15" y2="18.01" />
+                    </svg>
+                    Verified B2B Trade Rate (Excl. GST)
+                  </span>
                   {activePricing.retailBenchmarkPaise && (
                     <span
                       style={{ color: 'var(--thz-text-muted)', fontWeight: 400, marginLeft: '6px' }}

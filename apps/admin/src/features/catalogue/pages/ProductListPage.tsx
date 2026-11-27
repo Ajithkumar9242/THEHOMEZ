@@ -12,7 +12,15 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import { ClearOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  AppstoreOutlined,
+  ClearOutlined,
+  DollarOutlined,
+  PictureOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   PermissionCode,
@@ -38,6 +46,7 @@ export function ProductListPage() {
   const canRead = user?.permissions.includes(PermissionCode.CATALOG_READ) ?? false;
   const canWrite = user?.permissions.includes(PermissionCode.CATALOG_WRITE) ?? false;
   const canPublish = user?.permissions.includes(PermissionCode.CATALOG_PUBLISH) ?? false;
+  const canReadPricing = user?.permissions.includes(PermissionCode.PRICING_READ) ?? false;
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const page = Math.max(1, Number(params.get('page')) || 1);
@@ -286,7 +295,17 @@ export function ProductListPage() {
             resource="products"
           />
         ) : rows.length === 0 ? (
-          <Empty description="No products match these filters" />
+          <Empty description="No products match these filters">
+            {(applied.search ||
+              applied.status ||
+              applied.categoryId ||
+              applied.subcategoryId ||
+              applied.brand) && (
+              <Button icon={<ClearOutlined />} onClick={clearFilters}>
+                Reset filters
+              </Button>
+            )}
+          </Empty>
         ) : (
           <Table<IProduct>
             rowKey="id"
@@ -310,14 +329,54 @@ export function ProductListPage() {
                 title: 'Product',
                 dataIndex: 'title',
                 key: 'title',
+                sorter: (a, b) => a.title.localeCompare(b.title),
                 render: (title: string, item) => (
-                  <Space direction="vertical" size={0}>
-                    <Typography.Text strong>{title}</Typography.Text>
-                    <Typography.Text type="secondary">{item.slug}</Typography.Text>
+                  <Space align="center" size={12}>
+                    {item.images && item.images.length > 0 ? (
+                      <img
+                        src={item.images[0]}
+                        alt={title}
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 6,
+                          border: '1px solid #e2e8f0',
+                          objectFit: 'cover',
+                          display: 'block',
+                          flexShrink: 0,
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 6,
+                          border: '1px solid #e2e8f0',
+                          background: '#f8fafc',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#94a3b8',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <PictureOutlined style={{ fontSize: 18 }} />
+                      </div>
+                    )}
+                    <Space direction="vertical" size={0}>
+                      <Typography.Text strong>{title}</Typography.Text>
+                      <Typography.Text type="secondary">{item.slug}</Typography.Text>
+                    </Space>
                   </Space>
                 ),
               },
-              { title: 'Brand', dataIndex: 'brand', key: 'brand' },
+              {
+                title: 'Brand',
+                dataIndex: 'brand',
+                key: 'brand',
+                sorter: (a, b) => (a.brand || '').localeCompare(b.brand || ''),
+              },
               {
                 title: 'SKU',
                 dataIndex: 'sku',
@@ -348,7 +407,22 @@ export function ProductListPage() {
                 title: 'Type',
                 dataIndex: 'hasVariants',
                 key: 'variants',
-                render: (has: boolean) => (has ? <Tag color="blue">Variants</Tag> : 'Single item'),
+                render: (has: boolean, record: IProduct) =>
+                  has ? (
+                    <Tag
+                      color="blue"
+                      style={{ cursor: 'pointer' }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/catalogue/products/${encodeURIComponent(record.id)}/variants`);
+                      }}
+                      aria-label={`View variants for ${record.title}`}
+                    >
+                      Variants
+                    </Tag>
+                  ) : (
+                    <Tag color="default">Single item</Tag>
+                  ),
               },
               {
                 title: 'Status',
@@ -360,6 +434,8 @@ export function ProductListPage() {
                 title: 'Created',
                 dataIndex: 'createdAt',
                 key: 'created',
+                sorter: (a, b) =>
+                  new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
                 render: (date?: string) => (date ? new Date(date).toLocaleDateString() : '—'),
               },
               ...(canWrite || canPublish
@@ -367,9 +443,37 @@ export function ProductListPage() {
                     {
                       title: 'Actions',
                       key: 'actions',
-                      width: 200,
+                      width: 260,
                       render: (_: unknown, record: IProduct) => (
                         <Space onClick={(e) => e.stopPropagation()} wrap size="small">
+                          {record.hasVariants && (
+                            <Button
+                              size="small"
+                              icon={<AppstoreOutlined />}
+                              onClick={() =>
+                                navigate(
+                                  `/catalogue/products/${encodeURIComponent(record.id)}/variants`,
+                                )
+                              }
+                              aria-label={`Manage variants ${record.title}`}
+                            >
+                              Variants
+                            </Button>
+                          )}
+                          {!record.hasVariants && canReadPricing && (
+                            <Button
+                              size="small"
+                              icon={<DollarOutlined />}
+                              onClick={() =>
+                                navigate(
+                                  `/catalogue/products/${encodeURIComponent(record.id)}/pricing`,
+                                )
+                              }
+                              aria-label={`Pricing ${record.title}`}
+                            >
+                              Pricing
+                            </Button>
+                          )}
                           {canWrite && record.status !== 'ARCHIVED' && (
                             <Button
                               size="small"

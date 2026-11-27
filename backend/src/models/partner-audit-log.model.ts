@@ -1,7 +1,22 @@
 import mongoose, { Schema, type Document, type Model, type Types } from 'mongoose';
 
 export type PartnerAuditAction =
-  'PARTNER_STATUS_CHANGED' | 'PARTNER_SERVICE_AREAS_ASSIGNED' | 'PARTNER_AVAILABILITY_OVERRIDE';
+  | 'PARTNER_STATUS_CHANGED'
+  | 'PARTNER_SERVICE_AREAS_ASSIGNED'
+  | 'PARTNER_AVAILABILITY_OVERRIDE'
+  | 'PARTNER_PROFILE_UPDATED'
+  | 'PARTNER_OPERATOR_CREDENTIALS_UPDATED'
+  | 'PARTNER_REACTIVATED'
+  | 'PARTNER_REACTIVATION_WAIVER_GRANTED'
+  | 'PARTNER_DOCUMENT_UPLOADED'
+  | 'PARTNER_DOCUMENT_STATUS_CHANGED'
+  | 'PARTNER_DOCUMENT_DELETED'
+  | 'PARTNER_DOCUMENT_ACCESSED'
+  | 'PARTNER_DOCUMENT_MANUAL_SECURITY_OVERRIDE_GRANTED'
+  | 'PARTNER_DOCUMENT_SCAN_RESULT_RECORDED'
+  | 'PARTNER_DOCUMENT_RETROACTIVE_INFECTION_DETECTED'
+  | 'STORAGE_TAG_HEALED'
+  | 'STORAGE_CLEANUP_JOB_RETRY_TRIGGERED';
 
 export interface IPartnerAuditLogMetadata {
   staffEmail?: string;
@@ -12,7 +27,7 @@ export interface IPartnerAuditLogMetadata {
 }
 
 export interface IPartnerAuditLogDocument extends Document {
-  partnerId: Types.ObjectId;
+  partnerId?: Types.ObjectId;
   staffUserId: Types.ObjectId;
   action: PartnerAuditAction;
   previousState: Record<string, unknown>;
@@ -22,12 +37,22 @@ export interface IPartnerAuditLogDocument extends Document {
   createdAt: Date;
 }
 
+const SYSTEM_STORAGE_AUDIT_ACTIONS: readonly PartnerAuditAction[] = [
+  'STORAGE_CLEANUP_JOB_RETRY_TRIGGERED',
+  'STORAGE_TAG_HEALED',
+];
+
 const partnerAuditLogSchema = new Schema<IPartnerAuditLogDocument>(
   {
     partnerId: {
       type: Schema.Types.ObjectId,
       ref: 'Partner',
-      required: [true, 'partnerId is required'],
+      required: [
+        function (this: IPartnerAuditLogDocument): boolean {
+          return !SYSTEM_STORAGE_AUDIT_ACTIONS.includes(this.action);
+        },
+        'partnerId is required for partner audit actions',
+      ],
       index: true,
     },
     staffUserId: {
@@ -43,6 +68,19 @@ const partnerAuditLogSchema = new Schema<IPartnerAuditLogDocument>(
         'PARTNER_STATUS_CHANGED',
         'PARTNER_SERVICE_AREAS_ASSIGNED',
         'PARTNER_AVAILABILITY_OVERRIDE',
+        'PARTNER_PROFILE_UPDATED',
+        'PARTNER_OPERATOR_CREDENTIALS_UPDATED',
+        'PARTNER_REACTIVATED',
+        'PARTNER_REACTIVATION_WAIVER_GRANTED',
+        'PARTNER_DOCUMENT_UPLOADED',
+        'PARTNER_DOCUMENT_STATUS_CHANGED',
+        'PARTNER_DOCUMENT_DELETED',
+        'PARTNER_DOCUMENT_ACCESSED',
+        'PARTNER_DOCUMENT_MANUAL_SECURITY_OVERRIDE_GRANTED',
+        'PARTNER_DOCUMENT_SCAN_RESULT_RECORDED',
+        'PARTNER_DOCUMENT_RETROACTIVE_INFECTION_DETECTED',
+        'STORAGE_TAG_HEALED',
+        'STORAGE_CLEANUP_JOB_RETRY_TRIGGERED',
       ],
     },
     previousState: {

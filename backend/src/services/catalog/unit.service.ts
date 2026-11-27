@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import {
   type IUnit,
+  type ICreateUnitDto,
   type IUpdateUnitDto,
   type IUnitQueryDto,
   type IUnitConversionRate,
@@ -97,8 +98,79 @@ export class UnitService {
       filter.isActive = true;
     }
 
+    if (query?.search && query.search.trim().length > 0) {
+      const escaped = query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.$or = [
+        { code: { $regex: escaped, $options: 'i' } },
+        { name: { $regex: escaped, $options: 'i' } },
+        { symbol: { $regex: escaped, $options: 'i' } },
+      ];
+    }
+
     const docs = await UnitModel.find(filter).sort({ code: 1 });
     return docs.map(UnitService.toUnitDto);
+  }
+
+  /**
+   * Creates a new unit master entity (Admin only).
+   */
+  public async createUnit(dto: ICreateUnitDto): Promise<IUnit> {
+    const normalizedCode = dto.code.trim().toUpperCase();
+
+    // Enforce discrete invariants
+    if (dto.isDiscrete && dto.allowedMaxPrecision > 0) {
+      throw new UnitError(
+        `Discrete unit "${normalizedCode}" cannot have decimal precision (allowedMaxPrecision must be 0)`,
+        'DISCRETE_UNIT_CANNOT_HAVE_DECIMAL_PRECISION',
+        400,
+      );
+    }
+    if (dto.classification === 'COUNT') {
+      if (dto.allowedMaxPrecision > 0) {
+        throw new UnitError(
+          'Discrete units cannot have decimal precision (allowedMaxPrecision must be 0)',
+          'DISCRETE_UNIT_CANNOT_HAVE_DECIMAL_PRECISION',
+          400,
+        );
+      }
+    }
+    if (dto.allowedMaxPrecision < 0 || dto.allowedMaxPrecision > 3) {
+      throw new UnitError(
+        'allowedMaxPrecision must be an integer between 0 and 3',
+        'INVALID_UNIT_PRECISION',
+        400,
+      );
+    }
+
+    const existing = await UnitModel.findOne({ code: normalizedCode });
+    if (existing) {
+      throw new UnitError(
+        `Unit with code "${normalizedCode}" already exists`,
+        'UNIT_CODE_ALREADY_EXISTS',
+        409,
+      );
+    }
+
+    const isCount = dto.classification === 'COUNT';
+    const isDiscrete = isCount ? true : dto.isDiscrete;
+    const allowedMaxPrecision = isCount || isDiscrete ? 0 : dto.allowedMaxPrecision;
+
+    const unit = await UnitModel.create({
+      code: normalizedCode,
+      name: dto.name.trim(),
+      symbol: dto.symbol.trim(),
+      singularLabel: dto.singularLabel.trim(),
+      pluralLabel: dto.pluralLabel.trim(),
+      description: dto.description?.trim() || undefined,
+      classification: dto.classification,
+      isDiscrete,
+      allowedMaxPrecision,
+      isActive: dto.isActive !== false,
+      isSystem: false,
+      version: 0,
+    });
+
+    return UnitService.toUnitDto(unit);
   }
 
   /**

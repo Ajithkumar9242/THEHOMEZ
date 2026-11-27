@@ -11,6 +11,7 @@ import { unitController } from '../controllers/unit.controller.js';
 import {
   unitCodeParamSchema,
   unitQuerySchema,
+  createUnitSchema,
   updateUnitSchema,
   convertUnitSchema,
   validateQuantitySchema,
@@ -57,6 +58,19 @@ unitRouter.post(
  */
 unitRouter.get('/', optionalAuthenticate, validateQuery(unitQuerySchema), (req, res, next) =>
   unitController.listUnits(req, res, next),
+);
+
+/**
+ * Admin: Create a new unit master entity.
+ * POST /api/v1/units
+ */
+unitRouter.post(
+  '/',
+  authenticate,
+  staffOnlyGuard,
+  authorize(PermissionCode.CATALOG_WRITE),
+  validateBody(createUnitSchema),
+  (req, res, next) => unitController.createUnit(req, res, next),
 );
 
 /**

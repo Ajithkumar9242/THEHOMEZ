@@ -62,6 +62,19 @@ export interface IUpdatePartnerStatusDto {
 }
 
 /**
+ * Request payload for administrative partner profile updates.
+ */
+export interface IUpdatePartnerProfileDto {
+  businessName?: string;
+  legalName?: string | null;
+  phone?: string;
+  email?: string | null;
+  deliveryMode?: 'PARTNER_MANAGED' | 'PLATFORM_MANAGED';
+  syncPrimaryOperatorPhone?: boolean;
+  reason: string;
+}
+
+/**
  * Audit log entry DTO for partner lifecycle events.
  */
 export interface IPartnerAuditLogDto {

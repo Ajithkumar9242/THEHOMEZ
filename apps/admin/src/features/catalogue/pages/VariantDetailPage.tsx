@@ -74,6 +74,7 @@ export function VariantDetailPage() {
       <div className="catalogue-detail-page">
         <Button
           type="text"
+          className="thz-back-btn"
           icon={<ArrowLeftOutlined />}
           onClick={() => navigate(`/catalogue/products/${encodeURIComponent(productId)}/variants`)}
         >
@@ -98,6 +99,7 @@ export function VariantDetailPage() {
     <div className="catalogue-detail-page">
       <Button
         type="text"
+        className="thz-back-btn"
         icon={<ArrowLeftOutlined />}
         onClick={() => navigate(`/catalogue/products/${encodeURIComponent(productId)}/variants`)}
       >
@@ -253,6 +255,10 @@ export function VariantDetailPage() {
           setVariant(updated);
           setLifecycleModalOpen(false);
           setAttempt((n) => n + 1);
+        }}
+        onEditVariant={() => {
+          setLifecycleModalOpen(false);
+          setDrawerOpen(true);
         }}
       />
     </div>

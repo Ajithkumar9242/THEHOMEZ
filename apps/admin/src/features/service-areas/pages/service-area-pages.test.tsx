@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Grid } from 'antd';
 import {
   PermissionCode,
   UserStatus,
@@ -213,6 +214,14 @@ describe('service-area browser pages', () => {
     expect(await screen.findByText('Permission denied')).toBeInTheDocument();
     forbidden.unmount();
 
+    vi.spyOn(Grid, 'useBreakpoint').mockReturnValue({
+      md: true,
+      xs: false,
+      sm: true,
+      lg: true,
+      xl: true,
+      xxl: true,
+    });
     vi.mocked(useAuth).mockReturnValue(auth());
     const allowed = render(
       <MemoryRouter>

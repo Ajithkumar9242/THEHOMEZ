@@ -1,17 +1,38 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Checkbox, Descriptions, Modal, Space, Tag, Typography } from 'antd';
 import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Descriptions,
+  Modal,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+} from 'antd';
+import {
+  CheckCircleFilled,
   CheckCircleOutlined,
+  CloseCircleFilled,
   CloseCircleOutlined,
   DollarOutlined,
+  EditOutlined,
   ExclamationCircleOutlined,
+  LockOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { PermissionCode, type IProduct, type IProductVariant } from '@thehomez/shared-types';
+import {
+  PermissionCode,
+  type IProduct,
+  type IProductVariant,
+  type IProductPricing,
+} from '@thehomez/shared-types';
 import { ApiError } from '../../../services/api-client.js';
 import { useAuth } from '../../../providers/AuthProvider.js';
 import { variantClient } from '../api/variant-client.js';
+import { pricingClient } from '../api/pricing-client.js';
 
 export type VariantLifecycleAction = 'activate' | 'deactivate' | 'archive';
 
@@ -22,6 +43,7 @@ export interface VariantLifecycleModalProps {
   variant: IProductVariant | null;
   onClose: () => void;
   onSuccess: (updatedVariant: IProductVariant) => void;
+  onEditVariant?: (variant: IProductVariant) => void;
   userPermissions?: string[];
 }
 
@@ -39,6 +61,14 @@ const getVariantStatusColor = (status?: string) => {
   }
 };
 
+const formatPriceInr = (paise: number) => {
+  return (paise / 100).toLocaleString('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+  });
+};
+
 export function VariantLifecycleModal({
   open,
   action,
@@ -46,6 +76,7 @@ export function VariantLifecycleModal({
   variant,
   onClose,
   onSuccess,
+  onEditVariant,
   userPermissions: overridePermissions,
 }: VariantLifecycleModalProps) {
   const navigate = useNavigate();
@@ -54,13 +85,58 @@ export function VariantLifecycleModal({
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [archiveConfirmed, setArchiveConfirmed] = useState(false);
 
+  // Pricing verification state
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const [hasActiveGlobalPricing, setHasActiveGlobalPricing] = useState<boolean | null>(null);
+  const [activeGlobalPricing, setActiveGlobalPricing] = useState<IProductPricing | null>(null);
+
   useEffect(() => {
     if (!open) {
       setError(null);
       setArchiveConfirmed(false);
       setSubmitting(false);
+      setPricingLoading(false);
+      setHasActiveGlobalPricing(null);
+      setActiveGlobalPricing(null);
     }
   }, [open]);
+
+  // Query pricing when activation modal is opened
+  useEffect(() => {
+    if (!open || action !== 'activate' || !parentProduct || !variant) {
+      return;
+    }
+
+    let isMounted = true;
+    setPricingLoading(true);
+
+    pricingClient
+      .getVariantPricing(parentProduct.id, variant.id)
+      .then((items) => {
+        if (!isMounted) return;
+        const globalRecord = items?.find(
+          (p) =>
+            p.pricingScope === 'VARIANT_GLOBAL' &&
+            (!p.serviceAreaId || p.serviceAreaId === null) &&
+            p.isActive &&
+            p.b2cPricePaise > 0,
+        );
+        setActiveGlobalPricing(globalRecord || null);
+        setHasActiveGlobalPricing(Boolean(globalRecord));
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setHasActiveGlobalPricing(null);
+        setActiveGlobalPricing(null);
+      })
+      .finally(() => {
+        if (isMounted) setPricingLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [open, action, parentProduct?.id, variant?.id]);
 
   if (!variant || !parentProduct || !action) return null;
 
@@ -99,6 +175,29 @@ export function VariantLifecycleModal({
   const isAlreadyActive = action === 'activate' && variant.status === 'ACTIVE';
   const isAlreadyInactive = action === 'deactivate' && variant.status === 'INACTIVE';
 
+  // Unit configuration evaluation (Section A)
+  const effectiveUnitCode = variant.unitCode || parentProduct.unitCode || null;
+  const effectivePrecision =
+    variant.quantityPrecision !== null && variant.quantityPrecision !== undefined
+      ? variant.quantityPrecision
+      : parentProduct.quantityPrecision !== null && parentProduct.quantityPrecision !== undefined
+        ? parentProduct.quantityPrecision
+        : null;
+  const effectiveMoq = variant.minOrderQuantity || parentProduct.minOrderQuantity || null;
+  const effectiveStep = variant.stepIncrement || parentProduct.stepIncrement || null;
+
+  const isUnitConfigComplete = Boolean(
+    effectiveUnitCode &&
+    effectivePrecision !== null &&
+    effectivePrecision !== undefined &&
+    effectiveMoq &&
+    effectiveStep,
+  );
+
+  // Pricing prerequisite evaluation (Section B)
+  // When pricing has not yet been verified as missing, don't proactively lock before check completes
+  const isPricingValid = hasActiveGlobalPricing !== false;
+
   const isBlocked =
     !hasRequiredPermissions ||
     isParentArchived ||
@@ -106,10 +205,17 @@ export function VariantLifecycleModal({
     isAlreadyActive ||
     isAlreadyInactive;
 
-  const isConfirmDisabled = submitting || isBlocked || (action === 'archive' && !archiveConfirmed);
+  const isConfirmDisabled =
+    submitting ||
+    isBlocked ||
+    (action === 'archive' && !archiveConfirmed) ||
+    (action === 'activate' && (!isUnitConfigComplete || !isPricingValid));
 
   const handleExecute = async () => {
     if (isBlocked || submitting) return;
+    if (action === 'activate' && (!isUnitConfigComplete || hasActiveGlobalPricing === false)) {
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -143,6 +249,11 @@ export function VariantLifecycleModal({
       setSubmitting(false);
     }
   };
+
+  const isUnconfiguredUnitError =
+    error?.code === 'CANNOT_PUBLISH_UNCONFIGURED_UNIT' ||
+    error?.message?.toLowerCase().includes('complete unit configuration') ||
+    error?.message?.toLowerCase().includes('unitcode');
 
   const isUnpricedError =
     error?.code === 'CANNOT_ACTIVATE_UNPRICED_VARIANT' ||
@@ -195,7 +306,9 @@ export function VariantLifecycleModal({
         <Descriptions size="small" column={1} bordered>
           <Descriptions.Item label="Parent Product">{parentProduct.title}</Descriptions.Item>
           <Descriptions.Item label="Variant Title">{variant.title}</Descriptions.Item>
-          <Descriptions.Item label="Canonical SKU">{variant.sku || 'None'}</Descriptions.Item>
+          <Descriptions.Item label="Canonical SKU">
+            <span className="sku-cell">{variant.sku || 'None'}</span>
+          </Descriptions.Item>
           <Descriptions.Item label="Current Status">
             <Tag color={getVariantStatusColor(variant.status)}>{variant.status}</Tag>
           </Descriptions.Item>
@@ -254,6 +367,7 @@ export function VariantLifecycleModal({
               Activating this variant will transition it to <strong>ACTIVE</strong> and make it
               available for storefront search and purchase.
             </Typography.Paragraph>
+
             <Alert
               type="info"
               showIcon
@@ -276,6 +390,176 @@ export function VariantLifecycleModal({
                 </ul>
               }
             />
+
+            {/* Gate A: Unit Configuration */}
+            <Card
+              size="small"
+              title={
+                <Space>
+                  {isUnitConfigComplete ? (
+                    <CheckCircleFilled style={{ color: '#52c41a' }} />
+                  ) : (
+                    <CloseCircleFilled style={{ color: '#ff4d4f' }} />
+                  )}
+                  <span>Prerequisite A: Unit Configuration</span>
+                  <Tag color={isUnitConfigComplete ? 'success' : 'error'}>
+                    {isUnitConfigComplete ? 'Complete' : 'Incomplete'}
+                  </Tag>
+                </Space>
+              }
+              style={{
+                borderColor: isUnitConfigComplete ? '#b7eb8f' : '#ffa39e',
+                background: isUnitConfigComplete ? '#f6ffed' : '#fff1f0',
+              }}
+            >
+              <Descriptions size="small" column={2} bordered style={{ background: '#ffffff' }}>
+                <Descriptions.Item label="Unit Code">
+                  {effectiveUnitCode ? (
+                    <Tag color="blue">{effectiveUnitCode}</Tag>
+                  ) : (
+                    <Tag color="error">Missing</Tag>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="Precision">
+                  {effectivePrecision !== null && effectivePrecision !== undefined ? (
+                    <span>{effectivePrecision} decimals</span>
+                  ) : (
+                    <Tag color="error">Missing</Tag>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="MOQ">
+                  {effectiveMoq ? <span>{effectiveMoq}</span> : <Tag color="error">Missing</Tag>}
+                </Descriptions.Item>
+                <Descriptions.Item label="Step Increment">
+                  {effectiveStep ? <span>{effectiveStep}</span> : <Tag color="error">Missing</Tag>}
+                </Descriptions.Item>
+              </Descriptions>
+
+              {!isUnitConfigComplete && (
+                <div style={{ marginTop: 12 }}>
+                  <Typography.Text
+                    type="danger"
+                    style={{ display: 'block', marginBottom: 8, fontSize: 13 }}
+                  >
+                    Incomplete unit configuration prevents activation. Both the variant and parent
+                    lack complete unit settings.
+                  </Typography.Text>
+                  {onEditVariant && (
+                    <Button
+                      type="primary"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        onClose();
+                        onEditVariant(variant);
+                      }}
+                      aria-label="Configure variant units button"
+                    >
+                      Configure Variant Units
+                    </Button>
+                  )}
+                </div>
+              )}
+            </Card>
+
+            {/* Gate B: Pricing Configuration */}
+            <Card
+              size="small"
+              title={
+                <Space>
+                  {pricingLoading ? (
+                    <Spin size="small" />
+                  ) : hasActiveGlobalPricing === true ? (
+                    <CheckCircleFilled style={{ color: '#52c41a' }} />
+                  ) : hasActiveGlobalPricing === false ? (
+                    <CloseCircleFilled style={{ color: '#ff4d4f' }} />
+                  ) : (
+                    <ExclamationCircleOutlined style={{ color: '#faad14' }} />
+                  )}
+                  <span>Prerequisite B: Pricing Configuration</span>
+                  {pricingLoading ? (
+                    <Tag>Checking...</Tag>
+                  ) : hasActiveGlobalPricing === true ? (
+                    <Tag color="success">Complete</Tag>
+                  ) : hasActiveGlobalPricing === false ? (
+                    <Tag color="error">Missing</Tag>
+                  ) : (
+                    <Tag color="warning">Unverified</Tag>
+                  )}
+                </Space>
+              }
+              style={{
+                borderColor:
+                  hasActiveGlobalPricing === true
+                    ? '#b7eb8f'
+                    : hasActiveGlobalPricing === false
+                      ? '#ffa39e'
+                      : '#ffd591',
+                background:
+                  hasActiveGlobalPricing === true
+                    ? '#f6ffed'
+                    : hasActiveGlobalPricing === false
+                      ? '#fff1f0'
+                      : '#fffbe6',
+              }}
+            >
+              {pricingLoading ? (
+                <Space>
+                  <Spin size="small" />
+                  <Typography.Text type="secondary">
+                    Checking global B2C pricing status...
+                  </Typography.Text>
+                </Space>
+              ) : hasActiveGlobalPricing === true && activeGlobalPricing ? (
+                <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                  <Typography.Text>
+                    Active Global Baseline Price:{' '}
+                    <strong>{formatPriceInr(activeGlobalPricing.b2cPricePaise)}</strong>
+                  </Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    Scope: <code>VARIANT_GLOBAL</code> · Status: Active
+                  </Typography.Text>
+                </Space>
+              ) : hasActiveGlobalPricing === false ? (
+                <div>
+                  <Typography.Text
+                    type="danger"
+                    style={{ display: 'block', marginBottom: 8, fontSize: 13 }}
+                  >
+                    Missing active global B2C pricing record (<code>VARIANT_GLOBAL</code> &gt;
+                    ₹0.00). Variants cannot be activated without an active global price.
+                  </Typography.Text>
+                  <Button
+                    type="primary"
+                    icon={<DollarOutlined />}
+                    onClick={() => {
+                      onClose();
+                      navigate(
+                        `/catalogue/products/${encodeURIComponent(parentProduct.id)}/variants/${encodeURIComponent(variant.id)}/pricing`,
+                      );
+                    }}
+                    aria-label="Configure variant pricing button"
+                  >
+                    Configure Variant Pricing
+                  </Button>
+                </div>
+              ) : (
+                <Typography.Text type="secondary">
+                  Unable to pre-verify pricing record. Pricing validity will be enforced during
+                  activation.
+                </Typography.Text>
+              )}
+            </Card>
+
+            {/* Gate C: Final Activation Safeguard Alert */}
+            {(!isUnitConfigComplete || hasActiveGlobalPricing === false) && (
+              <Alert
+                type="warning"
+                showIcon
+                icon={<LockOutlined />}
+                message="Activation Locked"
+                description="All prerequisite gates above (complete unit configuration and active global B2C pricing) must be satisfied before this variant can be activated."
+              />
+            )}
           </>
         )}
 
@@ -324,7 +608,7 @@ export function VariantLifecycleModal({
           </>
         )}
 
-        {/* Backend Error State */}
+        {/* Backend Error State & Recovery Actions */}
         {error && (
           <Alert
             type="error"
@@ -332,24 +616,41 @@ export function VariantLifecycleModal({
             message={error.code ? `Operation Failed: ${error.code}` : 'Operation Failed'}
             description={
               <div>
-                <Typography.Paragraph style={{ marginBottom: isUnpricedError ? 12 : 0 }}>
+                <Typography.Paragraph
+                  style={{ marginBottom: isUnconfiguredUnitError || isUnpricedError ? 12 : 0 }}
+                >
                   {error.message}
                 </Typography.Paragraph>
-                {isUnpricedError && (
-                  <Button
-                    type="primary"
-                    icon={<DollarOutlined />}
-                    onClick={() => {
-                      onClose();
-                      navigate(
-                        `/catalogue/products/${encodeURIComponent(parentProduct.id)}/variants/${encodeURIComponent(variant.id)}/pricing`,
-                      );
-                    }}
-                    aria-label="Configure variant pricing button"
-                  >
-                    Configure Variant Pricing
-                  </Button>
-                )}
+                <Space wrap>
+                  {isUnconfiguredUnitError && onEditVariant && (
+                    <Button
+                      type="primary"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        onClose();
+                        onEditVariant(variant);
+                      }}
+                      aria-label="Configure variant units button"
+                    >
+                      Configure Variant Units
+                    </Button>
+                  )}
+                  {isUnpricedError && (
+                    <Button
+                      type="primary"
+                      icon={<DollarOutlined />}
+                      onClick={() => {
+                        onClose();
+                        navigate(
+                          `/catalogue/products/${encodeURIComponent(parentProduct.id)}/variants/${encodeURIComponent(variant.id)}/pricing`,
+                        );
+                      }}
+                      aria-label="Configure variant pricing button"
+                    >
+                      Configure Variant Pricing
+                    </Button>
+                  )}
+                </Space>
               </div>
             }
           />

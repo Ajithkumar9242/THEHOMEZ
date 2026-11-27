@@ -12,6 +12,7 @@ import {
 import { ApiError } from '../../../services/api-client.js';
 import { useAuth } from '../../../providers/AuthProvider.js';
 import { variantClient } from '../api/variant-client.js';
+import { pricingClient } from '../api/pricing-client.js';
 import { VariantLifecycleModal, type VariantLifecycleModalProps } from './VariantLifecycleModal.js';
 
 vi.mock('../../../providers/AuthProvider.js', () => ({ useAuth: vi.fn() }));
@@ -23,6 +24,12 @@ vi.mock('../api/variant-client.js', () => ({
     archive: vi.fn(),
     list: vi.fn(),
     get: vi.fn(),
+  },
+}));
+
+vi.mock('../api/pricing-client.js', () => ({
+  pricingClient: {
+    getVariantPricing: vi.fn(),
   },
 }));
 
@@ -144,6 +151,20 @@ function renderModalWithRouter(props: Partial<VariantLifecycleModalProps> = {}, 
 describe('VariantLifecycleModal', () => {
   beforeEach(() => {
     setupAuth([PermissionCode.CATALOG_WRITE, PermissionCode.CATALOG_PUBLISH]);
+    vi.mocked(pricingClient.getVariantPricing).mockResolvedValue([
+      {
+        id: 'pricing-global-1',
+        productId: 'prod-tmt-1',
+        variantId: 'var-10mm-1',
+        pricingScope: 'VARIANT_GLOBAL',
+        serviceAreaId: null,
+        isActive: true,
+        b2cPricePaise: 450000,
+        version: 1,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      } as any,
+    ]);
   });
 
   afterEach(() => {
@@ -570,5 +591,134 @@ describe('VariantLifecycleModal', () => {
       expect(handleSuccess).toHaveBeenCalledWith(updatedVariant);
       expect(handleClose).toHaveBeenCalledTimes(1);
     });
+  });
+
+  // Scenario 13: Renders canonical SKU with .sku-cell class
+  it('renders canonical SKU with .sku-cell class in context summary', () => {
+    renderModalWithRouter({
+      action: 'activate',
+      variant: mockDraftVariant,
+    });
+
+    const skuElement = document.querySelector('.sku-cell');
+    expect(skuElement).toBeInTheDocument();
+    expect(skuElement?.textContent).toBe(mockDraftVariant.sku);
+  });
+
+  // Scenario 14: Evaluates Gate A and renders complete unit configuration checklist
+  it('displays unit configuration breakdown with Complete status for fully configured variant', () => {
+    renderModalWithRouter({
+      action: 'activate',
+      variant: mockDraftVariant,
+    });
+
+    expect(screen.getByText('Prerequisite A: Unit Configuration')).toBeInTheDocument();
+    expect(screen.getAllByText('Complete').length).toBeGreaterThan(0);
+    expect(screen.getByText(mockDraftVariant.unitCode!)).toBeInTheDocument();
+    expect(screen.getByText(`${mockDraftVariant.quantityPrecision} decimals`)).toBeInTheDocument();
+    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2);
+  });
+
+  // Scenario 15: Blocks activation when unit configuration is incomplete and provides Configure Variant Units button
+  it('blocks activation when variant and parent lack unit configuration and invokes onEditVariant', async () => {
+    const handleClose = vi.fn();
+    const handleEditVariant = vi.fn();
+
+    const unconfiguredParent: IProduct = {
+      ...mockParentProduct,
+      unitCode: null as any,
+      quantityPrecision: null as any,
+      minOrderQuantity: null as any,
+      stepIncrement: null as any,
+    };
+
+    const unconfiguredVariant: IProductVariant = {
+      ...mockDraftVariant,
+      unitCode: null as any,
+      quantityPrecision: null as any,
+      minOrderQuantity: null as any,
+      stepIncrement: null as any,
+    };
+
+    renderModalWithRouter({
+      action: 'activate',
+      parentProduct: unconfiguredParent,
+      variant: unconfiguredVariant,
+      onClose: handleClose,
+      onEditVariant: handleEditVariant,
+    });
+
+    expect(screen.getByText('Incomplete')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Incomplete unit configuration prevents activation/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Activation Locked')).toBeInTheDocument();
+
+    const confirmBtn = screen.getByLabelText('Confirm activate button');
+    expect(confirmBtn).toBeDisabled();
+
+    const configureUnitsBtn = screen.getByLabelText('Configure variant units button');
+    expect(configureUnitsBtn).toBeInTheDocument();
+
+    fireEvent.click(configureUnitsBtn);
+
+    expect(handleClose).toHaveBeenCalledTimes(1);
+    expect(handleEditVariant).toHaveBeenCalledWith(unconfiguredVariant);
+  });
+
+  // Scenario 16: Blocks activation when active global B2C pricing is missing
+  it('blocks activation when active global B2C pricing is missing in Gate B', async () => {
+    vi.mocked(pricingClient.getVariantPricing).mockResolvedValueOnce([]);
+
+    renderModalWithRouter({
+      action: 'activate',
+      variant: mockDraftVariant,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Prerequisite B: Pricing Configuration')).toBeInTheDocument();
+      expect(screen.getByText('Missing')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Missing active global B2C pricing record/i)).toBeInTheDocument();
+    expect(screen.getByText('Activation Locked')).toBeInTheDocument();
+
+    const confirmBtn = screen.getByLabelText('Confirm activate button');
+    expect(confirmBtn).toBeDisabled();
+  });
+
+  // Scenario 17: Displays recovery button when CANNOT_PUBLISH_UNCONFIGURED_UNIT is returned
+  it('displays recovery button for CANNOT_PUBLISH_UNCONFIGURED_UNIT error', async () => {
+    const handleEditVariant = vi.fn();
+    const handleClose = vi.fn();
+
+    vi.mocked(variantClient.update).mockRejectedValueOnce(
+      new ApiError(
+        'Cannot activate variant: complete unit configuration (unitCode, quantityPrecision, minOrderQuantity, stepIncrement) is required',
+        400,
+        'CANNOT_PUBLISH_UNCONFIGURED_UNIT',
+      ),
+    );
+
+    renderModalWithRouter({
+      action: 'activate',
+      variant: mockDraftVariant,
+      onClose: handleClose,
+      onEditVariant: handleEditVariant,
+    });
+
+    const confirmBtn = screen.getByLabelText('Confirm activate button');
+    fireEvent.click(confirmBtn);
+
+    expect(
+      await screen.findByText('Operation Failed: CANNOT_PUBLISH_UNCONFIGURED_UNIT'),
+    ).toBeInTheDocument();
+
+    const configureBtn = screen.getByLabelText('Configure variant units button');
+    expect(configureBtn).toBeInTheDocument();
+
+    fireEvent.click(configureBtn);
+    expect(handleClose).toHaveBeenCalledTimes(1);
+    expect(handleEditVariant).toHaveBeenCalledWith(mockDraftVariant);
   });
 });

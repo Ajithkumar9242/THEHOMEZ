@@ -27,6 +27,7 @@ export * from './commerce/delivery-mode.js';
 export * from './commerce/address.js';
 export * from './commerce/customer.js';
 export * from './commerce/partner.js';
+export * from './commerce/partner-document.js';
 export * from './commerce/partner-application.js';
 export * from './commerce/cart.js';
 export * from './commerce/checkout.js';

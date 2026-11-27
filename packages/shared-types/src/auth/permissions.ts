@@ -17,6 +17,7 @@ export enum PermissionCode {
 
   // Partner Domain
   PARTNER_READ = 'partner:read',
+  PARTNER_WRITE = 'partner:write',
   PARTNER_ONBOARD = 'partner:onboard',
   PARTNER_VERIFY = 'partner:verify',
   PARTNER_SUSPEND = 'partner:suspend',

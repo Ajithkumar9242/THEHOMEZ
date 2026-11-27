@@ -49,3 +49,6 @@ export * from './cart.routes.js';
 export * from './checkout.routes.js';
 export * from './admin-partner-application.routes.js';
 export * from './admin-partner-application.schemas.js';
+export * from './admin-storage.routes.js';
+export * from './admin-storage.schemas.js';
+

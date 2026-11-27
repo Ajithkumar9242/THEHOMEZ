@@ -116,16 +116,16 @@ export const HomeView: React.FC = () => {
           <div className="thz-hero-content">
             <div className="thz-hero-status-pill">
               <span className="thz-status-dot" aria-hidden="true" />
-              <span>Bengaluru Central Hub • Active Dispatch</span>
+              <span>Bengaluru Central Hub · Active Trade Fulfillment</span>
             </div>
             <h1 id="hero-title" className="thz-hero-title">
-              Structural Steel, Cement & Aggregates.
+              Primary Structural Steel, Cement & Aggregates.
               <br />
-              <span className="thz-hero-title-highlight">Direct From Certified Hubs.</span>
+              <span className="thz-hero-title-highlight">Direct From Certified Regional Hubs.</span>
             </h1>
             <p className="thz-hero-subtitle">
-              Verified regional supply network with transparent wholesale tiers, computerized
-              weighbridge verification, and direct-to-jobsite fulfillment across Bengaluru.
+              Wholesale construction materials dispatched with computerized weighbridge slips,
+              mill test certificates (MTC), and direct-to-jobsite tipper offloading across Bengaluru.
             </p>
             <div className="thz-hero-actions">
               <button
@@ -137,27 +137,40 @@ export const HomeView: React.FC = () => {
                 <span aria-hidden="true">→</span>
               </button>
               <button type="button" className="thz-hero-btn-secondary" onClick={openLocationModal}>
-                <span>{pincode ? `Delivery PIN: ${pincode}` : '📍 Enter Delivery PIN'}</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+                <span>{pincode ? `Delivery PIN: ${pincode}` : 'Verify Delivery PIN'}</span>
               </button>
             </div>
             <div className="thz-hero-metrics">
               <div className="thz-hero-metric-item">
-                <span>📜</span>
-                <span>
-                  <strong>100%</strong> Mill Test Certified
-                </span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+                <span><strong>100%</strong> Mill Test Certified (MTC)</span>
               </div>
               <div className="thz-hero-metric-item">
-                <span>⚖️</span>
-                <span>
-                  <strong>Zero</strong> Weight Discrepancy
-                </span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="6" x2="12" y2="12" />
+                  <line x1="12" y1="12" x2="16" y2="14" />
+                </svg>
+                <span><strong>Zero</strong> Weight Discrepancy</span>
               </div>
               <div className="thz-hero-metric-item">
-                <span>🚚</span>
-                <span>
-                  <strong>Site Crane & Tipper</strong> Delivery
-                </span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="1" y="3" width="15" height="13" />
+                  <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                  <circle cx="5.5" cy="18.5" r="2.5" />
+                  <circle cx="18.5" cy="18.5" r="2.5" />
+                </svg>
+                <span><strong>Site Crane & Tipper</strong> Dispatch</span>
               </div>
             </div>
           </div>
@@ -166,10 +179,10 @@ export const HomeView: React.FC = () => {
           <div className="thz-hero-hub-card">
             <div className="thz-hub-card-header">
               <div className="thz-hub-title">
-                <span>🏗️</span>
-                <span>Central Hub Live Dispatch</span>
+                <span className="thz-hub-dot-indicator" aria-hidden="true" />
+                <span>Bengaluru Hub Spot Index</span>
               </div>
-              <span className="thz-hub-status-tag">REAL-TIME</span>
+              <span className="thz-hub-status-tag">SPOT BENCHMARK</span>
             </div>
             <div className="thz-hub-rates-list">
               <div className="thz-hub-rate-row">
@@ -194,7 +207,7 @@ export const HomeView: React.FC = () => {
               </div>
               <div className="thz-hub-rate-row">
                 <div>
-                  <span className="thz-rate-name">Supreme CPVC & Fittings</span>
+                  <span className="thz-rate-name">Supreme CPVC FlowGuard</span>
                   <span className="thz-rate-spec">SDR 11 Class 1 Heavy Duty</span>
                 </div>
                 <div>
@@ -207,7 +220,7 @@ export const HomeView: React.FC = () => {
               <p className="thz-hub-footer-hint">
                 {pincode
                   ? `Fulfillment verified for postal code ${pincode}`
-                  : 'Enter your jobsite PIN to lock in local inventory & volume discounts'}
+                  : 'Enter jobsite PIN to lock in local inventory and wholesale tiers'}
               </p>
               <button
                 type="button"
@@ -215,7 +228,7 @@ export const HomeView: React.FC = () => {
                 onClick={openLocationModal}
                 style={{ width: '100%' }}
               >
-                {pincode ? `Change Delivery PIN (${pincode})` : 'Verify Site Delivery PIN'}
+                {pincode ? `Delivery PIN: ${pincode} (Change)` : 'Verify Delivery PIN'}
               </button>
             </div>
           </div>
@@ -225,28 +238,37 @@ export const HomeView: React.FC = () => {
       {/* Quality & Commercial Trust Pillars ("The TheHomez Standard") */}
       <section className="thz-trust-section" aria-labelledby="trust-section-title">
         <div className="thz-section-header">
-          <span className="thz-section-eyebrow">The TheHomez Assurance</span>
+          <span className="thz-section-eyebrow">The TheHomez Standard</span>
           <h2 id="trust-section-title" className="thz-section-title">
-            Engineered For Contractors & Home Builders
+            Engineered For Contractors & Professional Builders
           </h2>
           <p className="thz-section-desc">
-            Contractor-grade compliance, guaranteed material traceability, and transparent pricing.
+            Contractor-grade compliance, guaranteed material traceability, and transparent wholesale pricing.
           </p>
         </div>
         <div className="thz-trust-grid">
           <div className="thz-trust-card">
             <div className="thz-trust-icon-box" aria-hidden="true">
-              📜
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+              </svg>
             </div>
             <h3 className="thz-trust-card-title">Mill Test Certificates (MTC)</h3>
             <p className="thz-trust-card-desc">
-              Direct mill traceability for every structural steel rebar and cement heat number.
-              Chemistry and tensile test certificates supplied with dispatch.
+              Direct mill traceability for every structural steel heat number and cement batch.
+              Chemistry and tensile test certificates provided upon dispatch.
             </p>
           </div>
           <div className="thz-trust-card">
             <div className="thz-trust-icon-box" aria-hidden="true">
-              ⚖️
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
             </div>
             <h3 className="thz-trust-card-title">Weighbridge Weight Slips</h3>
             <p className="thz-trust-card-desc">
@@ -256,7 +278,11 @@ export const HomeView: React.FC = () => {
           </div>
           <div className="thz-trust-card">
             <div className="thz-trust-icon-box" aria-hidden="true">
-              📉
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+              </svg>
             </div>
             <h3 className="thz-trust-card-title">Wholesale Volume Tiers</h3>
             <p className="thz-trust-card-desc">
@@ -266,7 +292,12 @@ export const HomeView: React.FC = () => {
           </div>
           <div className="thz-trust-card">
             <div className="thz-trust-icon-box" aria-hidden="true">
-              🚚
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="1" y="3" width="15" height="13" />
+                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                <circle cx="5.5" cy="18.5" r="2.5" />
+                <circle cx="18.5" cy="18.5" r="2.5" />
+              </svg>
             </div>
             <h3 className="thz-trust-card-title">Dedicated Site Logistics</h3>
             <p className="thz-trust-card-desc">
@@ -281,23 +312,14 @@ export const HomeView: React.FC = () => {
       <CategoryRail />
 
       {/* Featured Materials Ribbon */}
-      <section style={{ margin: '40px 0' }} aria-labelledby="featured-title">
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            marginBottom: '16px',
-            flexWrap: 'wrap',
-            gap: '8px',
-          }}
-        >
+      <section className="thz-featured-section" aria-labelledby="featured-title">
+        <div className="thz-featured-header">
           <div>
             <span className="thz-section-eyebrow">Spot Delivery Catalogue</span>
-            <h2 id="featured-title" className="thz-section-title" style={{ fontSize: '1.35rem' }}>
+            <h2 id="featured-title" className="thz-section-title">
               Featured Building Materials
             </h2>
-            <p style={{ fontSize: '0.85rem', color: 'var(--thz-text-muted)', marginTop: '2px' }}>
+            <p className="thz-featured-header-subtitle">
               Standard trade catalogue items ready for dispatch from central hubs
             </p>
           </div>
@@ -336,16 +358,8 @@ export const HomeView: React.FC = () => {
         {error && <ErrorDisplay message={error} onRetry={fetchFeatured} />}
 
         {!loading && !error && featuredProducts.length === 0 && (
-          <div
-            style={{
-              padding: '32px',
-              textAlign: 'center',
-              backgroundColor: 'var(--thz-white)',
-              borderRadius: '8px',
-              border: '1px solid var(--thz-border-subtle)',
-            }}
-          >
-            <p style={{ color: 'var(--thz-text-secondary)' }}>
+          <div className="thz-featured-empty">
+            <p>
               No featured materials found in current active catalogue.
             </p>
           </div>
@@ -360,16 +374,8 @@ export const HomeView: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div
-                style={{
-                  padding: '24px',
-                  textAlign: 'center',
-                  backgroundColor: 'var(--thz-white)',
-                  borderRadius: '8px',
-                  border: '1px solid var(--thz-border-subtle)',
-                }}
-              >
-                <p style={{ color: 'var(--thz-text-secondary)', marginBottom: '8px' }}>
+              <div className="thz-featured-empty">
+                <p style={{ marginBottom: '8px' }}>
                   No materials found under this quick filter in the featured collection.
                 </p>
                 <button
@@ -400,19 +406,27 @@ export const HomeView: React.FC = () => {
             </p>
             <div className="thz-b2b-features-grid">
               <div className="thz-b2b-feature-pill">
-                <span>✓</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#38BDF8', flexShrink: 0 }}>
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
                 <span>Tier 1-3 Volume Price Discounts</span>
               </div>
               <div className="thz-b2b-feature-pill">
-                <span>✓</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#38BDF8', flexShrink: 0 }}>
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
                 <span>100% GST ITC Invoicing</span>
               </div>
               <div className="thz-b2b-feature-pill">
-                <span>✓</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#38BDF8', flexShrink: 0 }}>
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
                 <span>Direct Batch Mill Reports</span>
               </div>
               <div className="thz-b2b-feature-pill">
-                <span>✓</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#38BDF8', flexShrink: 0 }}>
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
                 <span>Dedicated Dispatch Coordinator</span>
               </div>
             </div>
@@ -428,7 +442,11 @@ export const HomeView: React.FC = () => {
 
           <div className="thz-b2b-simulation-box">
             <div className="thz-b2b-box-title">
-              <span>📊</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#38BDF8' }}>
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+              </svg>
               <span>Volume Tier Economics</span>
             </div>
             <p style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>

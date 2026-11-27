@@ -31,7 +31,7 @@ import { ApiError } from '../../../services/api-client.js';
 import { variantClient } from '../api/variant-client.js';
 import { getUnits } from '../api/catalogue-lookups.js';
 import { AttributeEditor } from './AttributeEditor.js';
-import { ImageUrlManager } from './ImageUrlManager.js';
+import { VariantImageUploader } from './VariantImageUploader.js';
 
 export interface VariantFormDrawerProps {
   open: boolean;
@@ -175,6 +175,17 @@ export function VariantFormDrawer({
     if (unit?.isDiscrete) {
       form.setFieldValue('quantityPrecision', 0);
     }
+  };
+
+  const handleCopyParentUnitDefaults = () => {
+    if (!parentProduct?.unitCode) return;
+    form.setFieldsValue({
+      unitCode: parentProduct.unitCode,
+      quantityPrecision: parentProduct.quantityPrecision ?? 0,
+      minOrderQuantity: parentProduct.minOrderQuantity ?? '',
+      maxOrderQuantity: parentProduct.maxOrderQuantity ?? '',
+      stepIncrement: parentProduct.stepIncrement ?? '',
+    });
   };
 
   const isParentArchived = parentProduct?.status === 'ARCHIVED';
@@ -501,6 +512,13 @@ export function VariantFormDrawer({
               showIcon
               style={{ marginBottom: 16 }}
               message="Parent Unit Snapshot"
+              action={
+                !isUnitImmutable && !isControlsDisabled ? (
+                  <Button size="small" onClick={handleCopyParentUnitDefaults}>
+                    Copy Parent Unit Defaults
+                  </Button>
+                ) : undefined
+              }
               description={
                 <span>
                   Parent product specifies unit: <strong>{parentProduct.unitCode}</strong>
@@ -524,11 +542,11 @@ export function VariantFormDrawer({
             />
           ) : (
             <Alert
-              type="info"
+              type="warning"
               showIcon
               style={{ marginBottom: 16 }}
-              message="No Parent Unit Configuration"
-              description="The parent product has no unit configuration. Configure a unit for this variant or leave blank until required for activation."
+              message="Parent Product Lacks Unit Configuration"
+              description="The parent product has no unit configuration. You must explicitly configure Unit Code, Quantity Precision, Min Order Quantity, and Step Increment for this variant before activation can succeed."
             />
           )}
 
@@ -724,7 +742,7 @@ export function VariantFormDrawer({
 
         {/* Variant Images */}
         <Card title="Variant Images" variant="borderless" style={{ marginBottom: 16 }}>
-          <ImageUrlManager value={images} onChange={setImages} disabled={isControlsDisabled} />
+          <VariantImageUploader value={images} onChange={setImages} disabled={isControlsDisabled} />
         </Card>
       </Form>
     </Drawer>

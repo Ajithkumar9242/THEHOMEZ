@@ -14,6 +14,7 @@ import {
   VariantLifecycleModal,
   type VariantLifecycleAction,
 } from '../components/VariantLifecycleModal.js';
+import { ProductLifecycleModal } from '../components/ProductLifecycleModal.js';
 
 export function VariantListPage() {
   const { productId = '' } = useParams();
@@ -36,6 +37,7 @@ export function VariantListPage() {
   const [selectedVariant, setSelectedVariant] = useState<IProductVariant | null>(null);
   const [lifecycleAction, setLifecycleAction] = useState<VariantLifecycleAction | null>(null);
   const [lifecycleModalOpen, setLifecycleModalOpen] = useState(false);
+  const [productLifecycleModalOpen, setProductLifecycleModalOpen] = useState(false);
 
   useEffect(() => {
     if (!canRead) {
@@ -74,6 +76,7 @@ export function VariantListPage() {
       <div className="catalogue-detail-page">
         <Button
           type="text"
+          className="thz-back-btn"
           icon={<ArrowLeftOutlined />}
           onClick={() => navigate(`/catalogue/products/${encodeURIComponent(productId)}`)}
         >
@@ -96,11 +99,13 @@ export function VariantListPage() {
 
   const canCreateVariant =
     canWrite && product !== null && product.hasVariants && product.status !== 'ARCHIVED';
+  const activeVariantCount = variants.filter((v) => v.status === 'ACTIVE').length;
 
   return (
     <div className="catalogue-detail-page">
       <Button
         type="text"
+        className="thz-back-btn"
         icon={<ArrowLeftOutlined />}
         onClick={() => navigate(`/catalogue/products/${encodeURIComponent(productId)}`)}
       >
@@ -150,6 +155,33 @@ export function VariantListPage() {
         />
       )}
 
+      {product?.status === 'DRAFT' && activeVariantCount > 0 && (
+        <Alert
+          type="success"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="Product Ready to Publish"
+          description={
+            <Space direction="vertical" size={8}>
+              <span>
+                This product has {activeVariantCount} active variant(s) and meets all variant
+                criteria for publishing.
+              </span>
+              {canPublish && (
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={() => setProductLifecycleModalOpen(true)}
+                  aria-label={`Publish ${product.title}`}
+                >
+                  Publish Product Now
+                </Button>
+              )}
+            </Space>
+          }
+        />
+      )}
+
       <Card
         variant="borderless"
         className="catalogue-card"
@@ -176,7 +208,22 @@ export function VariantListPage() {
             resource="product variants"
           />
         ) : variants.length === 0 ? (
-          <Empty description="No variants found for this product" />
+          <Empty description="No variants found for this product">
+            {canCreateVariant && (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setSelectedVariant(null);
+                  setDrawerMode('create');
+                  setDrawerOpen(true);
+                }}
+                style={{ marginTop: 8 }}
+              >
+                Create First Variant
+              </Button>
+            )}
+          </Empty>
         ) : (
           <Table<IProductVariant>
             rowKey="id"
@@ -198,7 +245,11 @@ export function VariantListPage() {
                 render: (title: string, item) => (
                   <Space direction="vertical" size={0}>
                     <Typography.Text strong>{title}</Typography.Text>
-                    <Typography.Text type="secondary">{item.sku || 'No SKU'}</Typography.Text>
+                    {item.sku ? (
+                      <span className="sku-cell">{item.sku}</span>
+                    ) : (
+                      <Typography.Text type="secondary">No SKU</Typography.Text>
+                    )}
                   </Space>
                 ),
               },
@@ -342,6 +393,24 @@ export function VariantListPage() {
         onSuccess={() => {
           setLifecycleModalOpen(false);
           setSelectedVariant(null);
+          setAttempt((n) => n + 1);
+        }}
+        onEditVariant={(v) => {
+          setLifecycleModalOpen(false);
+          setSelectedVariant(v);
+          setDrawerMode('edit');
+          setDrawerOpen(true);
+        }}
+      />
+
+      <ProductLifecycleModal
+        open={productLifecycleModalOpen}
+        action="publish"
+        product={product}
+        onClose={() => setProductLifecycleModalOpen(false)}
+        onSuccess={(updated) => {
+          setProductLifecycleModalOpen(false);
+          if (updated) setProduct(updated);
           setAttempt((n) => n + 1);
         }}
       />

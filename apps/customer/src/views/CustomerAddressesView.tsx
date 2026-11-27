@@ -429,7 +429,10 @@ export const CustomerAddressesView: React.FC = () => {
       ) : addresses.length === 0 ? (
         <div className="thz-address-empty-state" role="status">
           <div className="thz-address-empty-icon" aria-hidden="true">
-            📍
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--thz-text-muted)' }}>
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
           </div>
           <h2 className="thz-address-empty-title">No saved delivery addresses yet</h2>
           <p className="thz-address-empty-copy">

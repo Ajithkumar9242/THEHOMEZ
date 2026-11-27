@@ -29,7 +29,10 @@ export const AvailabilityBadge: React.FC<AvailabilityBadgeProps> = ({
         className={`thz-avail-badge unlocalized ${className}`}
         aria-label="Availability unknown. Enter delivery PIN code to check local availability"
       >
-        <span>📍</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
         <span>Enter PIN for availability</span>
       </span>
     );
@@ -44,7 +47,7 @@ export const AvailabilityBadge: React.FC<AvailabilityBadgeProps> = ({
         className={`thz-avail-badge in-stock ${className}`}
         aria-label={`In stock locally. Minimum lead time ${availability.minLeadTimeHours ?? 'standard'} hours.`}
       >
-        <span>🟢</span>
+        <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }} aria-hidden="true" />
         <span>In Stock{leadTimeText}</span>
       </span>
     );
@@ -57,7 +60,11 @@ export const AvailabilityBadge: React.FC<AvailabilityBadgeProps> = ({
         className={`thz-avail-badge unserviceable ${className}`}
         aria-label="Delivery not available in this postal area."
       >
-        <span>⚠️</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
         <span>Delivery not available</span>
       </span>
     );
@@ -69,7 +76,7 @@ export const AvailabilityBadge: React.FC<AvailabilityBadgeProps> = ({
       className={`thz-avail-badge out-of-stock ${className}`}
       aria-label="Out of stock in your area."
     >
-      <span>🔴</span>
+      <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#EF4444', display: 'inline-block' }} aria-hidden="true" />
       <span>Out of Stock in area</span>
     </span>
   );

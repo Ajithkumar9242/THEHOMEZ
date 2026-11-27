@@ -98,9 +98,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               loading="lazy"
             />
           ) : (
-            <div className="thz-card-image-placeholder">
-              <span>🏗️</span>
-              <span>{product.brand}</span>
+            <div className="thz-card-image-placeholder" aria-label={`Material preview: ${product.title}`}>
+              <div className="thz-placeholder-blueprint" aria-hidden="true" />
+              <div className="thz-placeholder-content">
+                <span className="thz-placeholder-cat">{product.category?.name || 'MATERIALS'}</span>
+                <span className="thz-placeholder-brand">{product.brand || 'THEHOMEZ'}</span>
+                <span className="thz-placeholder-spec">MTC · WEIGHBRIDGE VERIFIED</span>
+              </div>
             </div>
           )}
         </div>
@@ -178,9 +182,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                       color: '#1e3a8a',
                       fontWeight: 600,
                       marginTop: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
                     }}
                   >
-                    ⚡ Volume Discounts Available
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                    </svg>
+                    Volume Discounts Available
                   </div>
                 )}
               </div>

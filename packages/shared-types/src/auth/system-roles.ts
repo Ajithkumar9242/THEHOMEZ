@@ -79,6 +79,7 @@ export const SYSTEM_ROLE_SEEDS = {
     isSystemManaged: false,
     permissions: [
       PermissionCode.PARTNER_READ,
+      PermissionCode.PARTNER_WRITE,
       PermissionCode.PARTNER_ONBOARD,
       PermissionCode.PARTNER_VERIFY,
       PermissionCode.PARTNER_SUSPEND,

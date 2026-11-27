@@ -53,6 +53,24 @@ export class UnitController {
   }
 
   /**
+   * Admin: Create a new unit master entity.
+   */
+  public async createUnit(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const unit = await unitService.createUnit(req.body);
+
+      const response: IApiResponse<IUnit> = {
+        success: true,
+        data: unit,
+      };
+
+      res.status(201).json(response);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
    * Admin: Update unit master metadata.
    */
   public async updateUnit(req: Request, res: Response, next: NextFunction): Promise<void> {

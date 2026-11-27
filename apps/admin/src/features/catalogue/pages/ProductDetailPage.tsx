@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Empty, Skeleton, Space, Typography } from 'antd';
+import { Alert, Button, Card, Empty, Skeleton, Space, Tag, Typography } from 'antd';
 import {
   ArrowLeftOutlined,
   AppstoreOutlined,
@@ -7,9 +7,10 @@ import {
   EditOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
-import { PermissionCode, type IProduct } from '@thehomez/shared-types';
+import { PermissionCode, type IProduct, type IProductVariant } from '@thehomez/shared-types';
 import { useAuth } from '../../../providers/AuthProvider.js';
 import { productClient } from '../api/product-client.js';
+import { variantClient } from '../api/variant-client.js';
 import { getCategories, getUnitLabels } from '../api/catalogue-lookups.js';
 import { CatalogueError } from '../components/CatalogueStates.js';
 import { ProductDetails } from '../components/ProductDetails.js';
@@ -27,6 +28,8 @@ export function ProductDetailPage() {
   const canWrite = user?.permissions.includes(PermissionCode.CATALOG_WRITE) ?? false;
   const canPublish = user?.permissions.includes(PermissionCode.CATALOG_PUBLISH) ?? false;
   const [product, setProduct] = useState<IProduct | null>(null);
+  const [variants, setVariants] = useState<IProductVariant[]>([]);
+  const [variantsLoading, setVariantsLoading] = useState(false);
   const [categories, setCategories] = useState<Map<string, string>>(new Map());
   const [units, setUnits] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -45,7 +48,21 @@ export function ProductDetailPage() {
     void productClient
       .get(productId, { signal: controller.signal })
       .then((result) => {
-        if (!controller.signal.aborted) setProduct(result);
+        if (!controller.signal.aborted) {
+          setProduct(result);
+          if (result.hasVariants) {
+            setVariantsLoading(true);
+            void variantClient
+              .list(productId, { signal: controller.signal })
+              .then((items) => {
+                if (!controller.signal.aborted) setVariants(items);
+              })
+              .catch(() => undefined)
+              .finally(() => {
+                if (!controller.signal.aborted) setVariantsLoading(false);
+              });
+          }
+        }
       })
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) setError(reason);
@@ -70,6 +87,7 @@ export function ProductDetailPage() {
     <div className="catalogue-detail-page">
       <Button
         type="text"
+        className="thz-back-btn"
         icon={<ArrowLeftOutlined />}
         onClick={() => navigate('/catalogue/products')}
       >
@@ -160,13 +178,36 @@ export function ProductDetailPage() {
                     navigate(`/catalogue/products/${encodeURIComponent(product.id)}/variants`)
                   }
                 >
-                  View variants
+                  Manage variants
                 </Button>
               }
             >
-              <Typography.Text type="secondary">
-                Inspect the variants attached to this product.
-              </Typography.Text>
+              {variantsLoading ? (
+                <Skeleton active paragraph={{ rows: 2 }} />
+              ) : (
+                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                  <Space wrap size="middle">
+                    <Tag color="blue">Total: {variants.length}</Tag>
+                    <Tag color="success">
+                      Active: {variants.filter((v) => v.status === 'ACTIVE').length}
+                    </Tag>
+                    <Tag color="default">
+                      Draft / Inactive: {variants.filter((v) => v.status !== 'ACTIVE').length}
+                    </Tag>
+                  </Space>
+                  {variants.filter((v) => v.status === 'ACTIVE').length === 0 && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message="No Active Variants"
+                      description="At least one variant must be ACTIVE before this product can be published. Click 'Manage variants' to configure and activate variants."
+                    />
+                  )}
+                  <Typography.Text type="secondary">
+                    Inspect and manage the variants attached to this product.
+                  </Typography.Text>
+                </Space>
+              )}
             </Card>
           )}
           {canReadPricing && !product.hasVariants && (

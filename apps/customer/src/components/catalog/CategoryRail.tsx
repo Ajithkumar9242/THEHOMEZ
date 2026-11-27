@@ -104,22 +104,15 @@ export const CategoryRail: React.FC = () => {
   }
 
   return (
-    <section style={{ margin: '36px 0' }} aria-labelledby="cat-rail-title">
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          marginBottom: '16px',
-        }}
-      >
+    <section className="thz-category-rail-section" aria-labelledby="cat-rail-title">
+      <div className="thz-category-rail-header">
         <div>
           <span className="thz-section-eyebrow">Trade Taxonomy</span>
-          <h2 id="cat-rail-title" className="thz-section-title" style={{ fontSize: '1.35rem' }}>
+          <h2 id="cat-rail-title" className="thz-section-title">
             Explore Building Materials
           </h2>
         </div>
-        <span style={{ fontSize: '0.85rem', color: 'var(--thz-text-muted)' }}>
+        <span className="thz-category-rail-subtitle">
           Direct hub dispatch by division
         </span>
       </div>

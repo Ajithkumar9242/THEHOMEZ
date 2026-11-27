@@ -40,6 +40,22 @@ export interface IUnit {
 }
 
 /**
+ * DTO for creating a new unit master entity
+ */
+export interface ICreateUnitDto {
+  code: string;
+  name: string;
+  symbol: string;
+  singularLabel: string;
+  pluralLabel: string;
+  description?: string;
+  classification: UnitClassification;
+  isDiscrete: boolean;
+  allowedMaxPrecision: number;
+  isActive?: boolean;
+}
+
+/**
  * DTO for updating unit master metadata
  */
 export interface IUpdateUnitDto {
@@ -58,6 +74,7 @@ export interface IUpdateUnitDto {
 export interface IUnitQueryDto {
   classification?: UnitClassification;
   activeOnly?: boolean;
+  search?: string;
 }
 
 /**

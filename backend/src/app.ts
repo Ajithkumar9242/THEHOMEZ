@@ -27,6 +27,7 @@ import { createAdminPartnerRouter } from './routes/admin-partner.routes.js';
 import { createAdminPartnerApplicationRouter } from './routes/admin-partner-application.routes.js';
 import { createAdminDashboardRouter } from './routes/admin-dashboard.routes.js';
 import { uploadRouter } from './routes/upload.routes.js';
+import { adminStorageRouter } from './routes/admin-storage.routes.js';
 
 /**
  * Creates and configures the Express application.
@@ -107,6 +108,7 @@ export function createApp(): Application {
   app.use(`${config.apiPrefix}/admin/customers`, createAdminCustomerRouter());
   app.use(`${config.apiPrefix}/admin/dashboard`, createAdminDashboardRouter());
   app.use(`${config.apiPrefix}/admin/uploads`, uploadRouter);
+  app.use(`${config.apiPrefix}/admin/storage`, adminStorageRouter);
 
   // Consumer Storefront Discovery & Browsing
   app.use(`${config.apiPrefix}/storefront`, storefrontRouter);

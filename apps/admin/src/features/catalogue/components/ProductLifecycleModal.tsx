@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Checkbox, Modal, Space, Typography } from 'antd';
 import {
+  AppstoreOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
   DeleteOutlined,
   DollarOutlined,
   ExclamationCircleOutlined,
+  FolderOutlined,
+  LoadingOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import type { IProduct } from '@thehomez/shared-types';
+import type { IProduct, IProductVariant } from '@thehomez/shared-types';
 import { ApiError } from '../../../services/api-client.js';
 import { productClient } from '../api/product-client.js';
+import { variantClient } from '../api/variant-client.js';
 
 export type ProductLifecycleAction = 'publish' | 'deactivate' | 'archive' | 'delete';
 
@@ -34,14 +38,38 @@ export function ProductLifecycleModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [archiveConfirmed, setArchiveConfirmed] = useState(false);
+  const [variants, setVariants] = useState<IProductVariant[] | null>(null);
+  const [loadingVariants, setLoadingVariants] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setError(null);
       setArchiveConfirmed(false);
       setSubmitting(false);
+      setVariants(null);
+      setLoadingVariants(false);
+      return undefined;
     }
-  }, [open]);
+
+    if (action === 'publish' && product?.hasVariants) {
+      const controller = new AbortController();
+      setLoadingVariants(true);
+      void variantClient
+        .list(product.id, { signal: controller.signal })
+        .then((items) => {
+          if (!controller.signal.aborted) setVariants(items);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setVariants([]);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoadingVariants(false);
+        });
+      return () => controller.abort();
+    }
+
+    return undefined;
+  }, [open, action, product?.id, product?.hasVariants]);
 
   if (!product || !action) return null;
 
@@ -80,10 +108,28 @@ export function ProductLifecycleModal({
     }
   };
 
-  const isPricingError =
-    error?.code === 'CANNOT_PUBLISH_UNPRICED_PRODUCT' ||
+  const activeVariants = variants ? variants.filter((v) => v.status === 'ACTIVE') : [];
+  const hasNoActiveVariants =
+    action === 'publish' &&
+    Boolean(product.hasVariants) &&
+    variants !== null &&
+    activeVariants.length === 0;
+
+  const isNoActiveVariantError =
+    error?.code === 'CANNOT_PUBLISH_PRODUCT' &&
+    (error?.message?.toLowerCase().includes('active variant') ||
+      error?.message?.toLowerCase().includes('multi-variant'));
+
+  const isVariantPricingError =
     error?.code === 'CANNOT_PUBLISH_PRODUCT_WITH_UNPRICED_VARIANTS' ||
-    error?.message?.toLowerCase().includes('pricing');
+    (Boolean(product.hasVariants) && Boolean(error?.message?.toLowerCase().includes('pricing')));
+
+  const isStandalonePricingError =
+    error?.code === 'CANNOT_PUBLISH_UNPRICED_PRODUCT' ||
+    (!product.hasVariants && Boolean(error?.message?.toLowerCase().includes('pricing')));
+
+  const isUnitConfigError = error?.code === 'CANNOT_PUBLISH_UNCONFIGURED_UNIT';
+  const isCategoryInactiveError = error?.code === 'CATEGORY_INACTIVE';
 
   const titles: Record<ProductLifecycleAction, string> = {
     publish: `Publish Product: ${product.title}`,
@@ -117,7 +163,10 @@ export function ProductLifecycleModal({
             type="primary"
             danger={action === 'archive' || action === 'delete'}
             loading={submitting}
-            disabled={action === 'archive' && !archiveConfirmed}
+            disabled={
+              (action === 'archive' && !archiveConfirmed) ||
+              (action === 'publish' && hasNoActiveVariants)
+            }
             onClick={handleExecute}
             aria-label={`Confirm ${action} button`}
           >
@@ -136,6 +185,64 @@ export function ProductLifecycleModal({
               Publishing will transition this product to <strong>ACTIVE</strong> and make it visible
               on the public storefront.
             </Typography.Paragraph>
+
+            {product.hasVariants && loadingVariants && (
+              <Alert
+                type="info"
+                showIcon
+                icon={<LoadingOutlined />}
+                message="Checking Variant Readiness"
+                description="Validating child variants for publication eligibility..."
+              />
+            )}
+
+            {product.hasVariants && !loadingVariants && variants !== null && (
+              <>
+                {activeVariants.length === 0 ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    icon={<ExclamationCircleOutlined />}
+                    message="Publication Gate: No Active Variants Found"
+                    description={
+                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <Typography.Text>
+                          {variants.length === 0
+                            ? 'This multi-variant product currently has 0 variants. At least one ACTIVE variant is required before publication.'
+                            : `This product has ${variants.length} variant(s), but none are currently ACTIVE (${variants.filter((v) => v.status === 'DRAFT').length} Draft, ${variants.filter((v) => v.status === 'INACTIVE').length} Inactive).`}
+                        </Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                          To publish: open Variant Management, ensure variant unit configuration and
+                          global B2C pricing are set, and activate at least one variant.
+                        </Typography.Text>
+                        <div>
+                          <Button
+                            type="primary"
+                            icon={<AppstoreOutlined />}
+                            onClick={() => {
+                              onClose();
+                              navigate(
+                                `/catalogue/products/${encodeURIComponent(product.id)}/variants`,
+                              );
+                            }}
+                          >
+                            Manage Product Variants
+                          </Button>
+                        </div>
+                      </Space>
+                    }
+                  />
+                ) : (
+                  <Alert
+                    type="success"
+                    showIcon
+                    message={`Variant Readiness: ${activeVariants.length} of ${variants.length} variant(s) active`}
+                    description="At least one active variant is ready for publication. Ensure all active variants have active global B2C pricing configured."
+                  />
+                )}
+              </>
+            )}
+
             <Alert
               type="info"
               showIcon
@@ -237,11 +344,49 @@ export function ProductLifecycleModal({
             showIcon
             message={error.code ? `Operation Failed: ${error.code}` : 'Operation Failed'}
             description={
-              <div>
-                <Typography.Paragraph style={{ marginBottom: isPricingError ? 8 : 0 }}>
+              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <Typography.Paragraph style={{ marginBottom: 4 }}>
                   {error.message}
                 </Typography.Paragraph>
-                {isPricingError && !product.hasVariants && (
+
+                {isNoActiveVariantError && (
+                  <Button
+                    type="primary"
+                    icon={<AppstoreOutlined />}
+                    onClick={() => {
+                      onClose();
+                      navigate(`/catalogue/products/${encodeURIComponent(product.id)}/variants`);
+                    }}
+                  >
+                    Go to Variant Management
+                  </Button>
+                )}
+
+                {isVariantPricingError && (
+                  <Space wrap>
+                    <Button
+                      type="primary"
+                      icon={<DollarOutlined />}
+                      onClick={() => {
+                        onClose();
+                        navigate(`/catalogue/products/${encodeURIComponent(product.id)}/pricing`);
+                      }}
+                    >
+                      Configure Variant Pricing
+                    </Button>
+                    <Button
+                      icon={<AppstoreOutlined />}
+                      onClick={() => {
+                        onClose();
+                        navigate(`/catalogue/products/${encodeURIComponent(product.id)}/variants`);
+                      }}
+                    >
+                      View Variants
+                    </Button>
+                  </Space>
+                )}
+
+                {isStandalonePricingError && (
                   <Button
                     type="primary"
                     icon={<DollarOutlined />}
@@ -253,7 +398,36 @@ export function ProductLifecycleModal({
                     Open Pricing Browser to Configure Pricing
                   </Button>
                 )}
-              </div>
+
+                {isUnitConfigError && (
+                  <Button
+                    type="primary"
+                    icon={<AppstoreOutlined />}
+                    onClick={() => {
+                      onClose();
+                      if (product.hasVariants) {
+                        navigate(`/catalogue/products/${encodeURIComponent(product.id)}/variants`);
+                      } else {
+                        navigate(`/catalogue/products/${encodeURIComponent(product.id)}`);
+                      }
+                    }}
+                  >
+                    {product.hasVariants ? 'Configure Variant Units' : 'Inspect Unit Configuration'}
+                  </Button>
+                )}
+
+                {isCategoryInactiveError && (
+                  <Button
+                    icon={<FolderOutlined />}
+                    onClick={() => {
+                      onClose();
+                      navigate('/catalogue/categories');
+                    }}
+                  >
+                    Manage Categories
+                  </Button>
+                )}
+              </Space>
             }
           />
         )}

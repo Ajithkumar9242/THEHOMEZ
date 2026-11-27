@@ -345,30 +345,45 @@ export function ServiceAreaFormDrawer({
           </Col>
           <Col span={12}>
             <Form.Item
-              name="deliveryRadiusKm"
               label="Delivery Radius (Optional)"
-              rules={[
-                {
-                  validator(_, val) {
-                    if (val === undefined || val === null || val === '') return Promise.resolve();
-                    const num = Number(val);
-                    if (Number.isNaN(num) || num < 0 || num > 500) {
-                      return Promise.reject(new Error('Radius must be between 0 and 500 km'));
-                    }
-                    return Promise.resolve();
-                  },
-                },
-              ]}
               extra="Informational coverage radius in km"
             >
-              <InputNumber
-                style={{ width: '100%' }}
-                min={0}
-                max={500}
-                addonAfter="km"
-                placeholder="e.g. 25"
-                aria-label="Delivery radius in kilometres"
-              />
+              <Space.Compact style={{ width: '100%' }}>
+                <Form.Item
+                  name="deliveryRadiusKm"
+                  noStyle
+                  rules={[
+                    {
+                      validator(_, val) {
+                        if (val === undefined || val === null || val === '') return Promise.resolve();
+                        const num = Number(val);
+                        if (Number.isNaN(num) || num < 0 || num > 500) {
+                          return Promise.reject(new Error('Radius must be between 0 and 500 km'));
+                        }
+                        return Promise.resolve();
+                      },
+                    },
+                  ]}
+                >
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    min={0}
+                    max={500}
+                    placeholder="e.g. 25"
+                    aria-label="Delivery radius in kilometres"
+                  />
+                </Form.Item>
+                <Button
+                  disabled
+                  style={{
+                    cursor: 'default',
+                    color: 'rgba(0, 0, 0, 0.45)',
+                    backgroundColor: '#fafafa',
+                  }}
+                >
+                  km
+                </Button>
+              </Space.Compact>
             </Form.Item>
           </Col>
         </Row>

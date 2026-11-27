@@ -27,6 +27,7 @@ export const Header: React.FC = () => {
     navigateToAccount,
     navigateToAddresses,
     navigateToCart,
+    currentView,
   } = useStorefront();
 
   const auth = useOptionalAuthContext();
@@ -61,10 +62,10 @@ export const Header: React.FC = () => {
 
   const locationPillText =
     isServiceable === true && pincode && serviceArea
-      ? `📍 ${pincode} — ${serviceArea.code}`
+      ? `${pincode} — ${serviceArea.code}`
       : isServiceable === false && pincode
-        ? `⚠️ ${pincode} — Unserviceable`
-        : '📍 Select Delivery Location';
+        ? `${pincode} — Unserviceable`
+        : 'Select Delivery PIN';
 
   const formattedUserPhone = auth?.user?.phone
     ? formatDisplayPhone(auth.user.phone, auth.user.phone.startsWith('+91') ? '+91' : '')
@@ -76,13 +77,15 @@ export const Header: React.FC = () => {
       <div className="thz-top-announcement">
         <div className="thz-top-announcement-inner">
           <div className="thz-top-badge">
-            <span className="thz-top-tag">Hub Dispatch</span>
+            <span className="thz-top-tag">TRADE DISPATCH</span>
             <span>Hyperlocal Trade Materials Delivery Across Bengaluru</span>
           </div>
           <div className="thz-top-links">
-            <span className="thz-top-link-item">🏗️ Verified Batch Compliance</span>
-            <span className="thz-top-link-item">⚖️ Weighbridge Guaranteed</span>
-            <span className="thz-top-link-item">📜 Mill Test Certificates (MTC)</span>
+            <span className="thz-top-link-item">Weighbridge Slips Guaranteed</span>
+            <span className="thz-top-divider" aria-hidden="true">·</span>
+            <span className="thz-top-link-item">Mill Test Certificates (MTC)</span>
+            <span className="thz-top-divider" aria-hidden="true">·</span>
+            <span className="thz-top-link-item">Direct Jobsite Offloading</span>
           </div>
         </div>
       </div>
@@ -96,8 +99,8 @@ export const Header: React.FC = () => {
           aria-label="TheHomez Home"
         >
           <svg
-            width="22"
-            height="22"
+            width="24"
+            height="24"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -105,13 +108,12 @@ export const Header: React.FC = () => {
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden="true"
-            style={{ marginRight: '2px' }}
           >
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
             <polyline points="9 22 9 12 15 12 15 22" />
           </svg>
           <span>TheHomez</span>
-          <span className="thz-logo-badge">COMMERCIAL</span>
+          <span className="thz-logo-badge">TRADE HUB</span>
         </button>
 
         {/* Global Search Bar */}
@@ -121,6 +123,12 @@ export const Header: React.FC = () => {
           role="search"
           aria-label="Search catalog materials"
         >
+          <span className="thz-search-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </span>
           <input
             type="search"
             className="thz-search-input"
@@ -148,6 +156,10 @@ export const Header: React.FC = () => {
             onClick={openLocationModal}
             aria-label={`Delivery location: ${locationPillText}. Click to change.`}
           >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
             <span>{locationPillText}</span>
           </button>
 
@@ -162,7 +174,11 @@ export const Header: React.FC = () => {
                 : 'Shopping Cart'
             }
           >
-            <span aria-hidden="true">🛒</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="9" cy="21" r="1" />
+              <circle cx="20" cy="21" r="1" />
+              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+            </svg>
             <span>Cart</span>
             {cartItemCount !== null && cartItemCount > 0 ? (
               <span className="thz-cart-count-badge">{cartItemCount}</span>
@@ -183,7 +199,10 @@ export const Header: React.FC = () => {
                 onClick={navigateToAccount}
                 aria-label={`My Account (${formattedUserPhone})`}
               >
-                <span aria-hidden="true">👤</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
                 <span>{formattedUserPhone}</span>
               </button>
               <button
@@ -192,7 +211,6 @@ export const Header: React.FC = () => {
                 onClick={navigateToAddresses}
                 aria-label="Saved Delivery Addresses"
               >
-                <span aria-hidden="true">📋</span>
                 <span>Addresses</span>
               </button>
               <button
@@ -225,7 +243,7 @@ export const Header: React.FC = () => {
           <li>
             <button
               type="button"
-              className="thz-nav-item"
+              className={`thz-nav-item ${currentView === 'home' ? 'active' : ''}`}
               onClick={navigateToHome}
               aria-label="Navigate to Home"
             >
@@ -235,7 +253,7 @@ export const Header: React.FC = () => {
           <li>
             <button
               type="button"
-              className="thz-nav-item"
+              className={`thz-nav-item ${currentView === 'plp' ? 'active' : ''}`}
               onClick={() => navigateToPlp({})}
               aria-label="Browse All Materials"
             >

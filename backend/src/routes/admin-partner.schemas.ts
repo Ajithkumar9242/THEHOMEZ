@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizePhoneNumber } from '../services/phone.utils.js';
 
 export const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
@@ -99,3 +100,117 @@ export const adminPartnerAuditLogsQuerySchema = z
   .strict();
 
 export type AdminPartnerAuditLogsQuery = z.infer<typeof adminPartnerAuditLogsQuerySchema>;
+
+/**
+ * Empty query schema for endpoints that strictly do not accept query parameters.
+ */
+export const emptyQuerySchema = z.object({}).strict();
+
+/**
+ * Query schema for partner KYC documents listing (GET /api/v1/admin/partners/:partnerId/documents)
+ * Strictly disallows any query parameters.
+ */
+export const adminPartnerDocumentsQuerySchema = emptyQuerySchema;
+
+/**
+ * Path parameter validation schema for partner document operations.
+ * Validates both partnerId and docId as 24-character hexadecimal ObjectIds.
+ */
+export const adminPartnerDocParamSchema = z
+  .object({
+    partnerId: z.string().trim().regex(OBJECT_ID_REGEX, 'Invalid partner ID format'),
+    docId: z.string().trim().regex(OBJECT_ID_REGEX, 'Invalid document ID format'),
+  })
+  .strict();
+
+export type AdminPartnerDocParam = z.infer<typeof adminPartnerDocParamSchema>;
+
+/**
+ * Body schema for manual security review override (POST /api/v1/admin/partners/:partnerId/documents/:docId/scan-override)
+ * Requires justification reason >= 20 characters per Blueprint P1A-11.
+ */
+export const scanOverrideSchema = z
+  .object({
+    reason: z
+      .string()
+      .trim()
+      .min(20, 'Override justification reason must be at least 20 characters')
+      .max(500, 'Override justification reason cannot exceed 500 characters'),
+  })
+  .strict();
+
+export type ScanOverrideInput = z.infer<typeof scanOverrideSchema>;
+
+/**
+ * Request payload schema for partner profile update (PUT /api/v1/admin/partners/:partnerId)
+ * Blueprint P1A-13: Modifies partner dispatch contacts without altering UserModel login credentials,
+ * unless syncPrimaryOperatorPhone is explicitly true.
+ */
+export const updatePartnerProfileSchema = z
+  .object({
+    businessName: z
+      .string()
+      .trim()
+      .min(2, 'businessName must be at least 2 characters')
+      .max(100, 'businessName cannot exceed 100 characters')
+      .optional(),
+    legalName: z
+      .string()
+      .trim()
+      .max(120, 'legalName cannot exceed 120 characters')
+      .nullable()
+      .optional(),
+    phone: z
+      .string()
+      .trim()
+      .refine(
+        (val) => {
+          try {
+            normalizePhoneNumber(val);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { message: 'Phone number must be a valid E.164 phone string' },
+      )
+      .transform((val) => normalizePhoneNumber(val))
+      .optional(),
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email('Invalid email address')
+      .nullable()
+      .optional(),
+    deliveryMode: z.enum(['PARTNER_MANAGED', 'PLATFORM_MANAGED']).optional(),
+    syncPrimaryOperatorPhone: z.boolean().optional().default(false),
+    reason: z
+      .string({ message: 'Audit reason is required' })
+      .trim()
+      .min(10, 'Audit reason must be at least 10 characters')
+      .max(500, 'Audit reason cannot exceed 500 characters'),
+  })
+  .strict()
+  .refine(
+    (data) =>
+      data.businessName !== undefined ||
+      data.legalName !== undefined ||
+      data.phone !== undefined ||
+      data.email !== undefined ||
+      data.deliveryMode !== undefined,
+    {
+      message:
+        'At least one profile field (businessName, legalName, phone, email, deliveryMode) must be provided for update',
+    },
+  )
+  .refine(
+    (data) => !data.syncPrimaryOperatorPhone || data.phone !== undefined,
+    {
+      message: 'phone is required when syncPrimaryOperatorPhone is true',
+      path: ['syncPrimaryOperatorPhone'],
+    },
+  );
+
+export type UpdatePartnerProfileInput = z.infer<typeof updatePartnerProfileSchema>;
+
