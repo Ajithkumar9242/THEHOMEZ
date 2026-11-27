@@ -25,6 +25,7 @@ import {
   EICAR_STANDARD_TEST_STRING,
 } from '../src/services/security/malware-scanner.service.js';
 import { validateDocumentSignature } from '../src/services/storage/file-signature.validator.js';
+import { v2 as cloudinary } from 'cloudinary';
 import { cloudinaryPrivateStorageAdapter } from '../src/services/storage/cloudinary-private-storage.service.js';
 import { storageCleanupService } from '../src/services/storage/storage-cleanup.service.js';
 
@@ -1606,6 +1607,68 @@ describe('Phase 1A: Private KYC Storage Slice Integration Tests', () => {
 
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('SECURITY_OVERRIDE_CONFLICT');
+    });
+  });
+
+  describe('CloudinaryPrivateStorageAdapter Cursor-Based Pagination & Fail-Closed Behavior (FIX 4)', () => {
+    it('retrieves all pages using next_cursor pagination without skipping or duplicating objects', async () => {
+      // Configure mock config if needed
+      vi.spyOn(cloudinaryPrivateStorageAdapter as any, 'configureSdk').mockReturnValue(true);
+
+      const page1Image = { public_id: 'thehomez-private/partners/p-1/doc1.jpg', bytes: 100, created_at: new Date().toISOString() };
+      const page2Image = { public_id: 'thehomez-private/partners/p-1/doc2.jpg', bytes: 200, created_at: new Date().toISOString() };
+      const rawDoc = { public_id: 'thehomez-private/partners/p-1/doc3.pdf', bytes: 300, created_at: new Date().toISOString() };
+
+      const resourcesSpy = vi.spyOn(cloudinary.api, 'resources').mockImplementation((options: any) => {
+        if (options.resource_type === 'image') {
+          if (!options.next_cursor) {
+            return Promise.resolve({
+              resources: [page1Image],
+              next_cursor: 'cursor_page_2',
+            }) as any;
+          } else if (options.next_cursor === 'cursor_page_2') {
+            return Promise.resolve({
+              resources: [page2Image],
+              next_cursor: undefined,
+            }) as any;
+          }
+        }
+        if (options.resource_type === 'raw') {
+          return Promise.resolve({
+            resources: [rawDoc],
+            next_cursor: undefined,
+          }) as any;
+        }
+        return Promise.resolve({ resources: [] }) as any;
+      });
+
+      const results = await cloudinaryPrivateStorageAdapter.listStorageObjects('thehomez-private/partners/');
+
+      expect(results).toHaveLength(3);
+      expect(results.map((r) => r.key)).toEqual([
+        'thehomez-private/partners/p-1/doc1.jpg',
+        'thehomez-private/partners/p-1/doc2.jpg',
+        'thehomez-private/partners/p-1/doc3.pdf',
+      ]);
+      // Verify pagination cursor was passed to Cloudinary API
+      expect(resourcesSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resource_type: 'image',
+          next_cursor: 'cursor_page_2',
+        }),
+      );
+    });
+
+    it('propagates Cloudinary API listing errors instead of silently returning empty inventory', async () => {
+      vi.spyOn(cloudinaryPrivateStorageAdapter as any, 'configureSdk').mockReturnValue(true);
+
+      vi.spyOn(cloudinary.api, 'resources').mockRejectedValue(
+        new Error('Cloudinary 429 Too Many Requests: Rate limit exceeded'),
+      );
+
+      await expect(
+        cloudinaryPrivateStorageAdapter.listStorageObjects('thehomez-private/partners/'),
+      ).rejects.toThrow('Cloudinary 429 Too Many Requests: Rate limit exceeded');
     });
   });
 });

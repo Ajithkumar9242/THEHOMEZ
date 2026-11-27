@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { Grid } from 'antd';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import {
   PermissionCode,
@@ -200,6 +201,14 @@ describe('Admin Customer Directory UI (Stage C-4)', () => {
     });
 
     it('displays Customers in sidebar navigation when staff has CUSTOMER_READ', () => {
+      vi.spyOn(Grid, 'useBreakpoint').mockReturnValue({
+        md: true,
+        xs: false,
+        sm: true,
+        lg: true,
+        xl: true,
+        xxl: true,
+      });
       vi.mocked(useAuth).mockReturnValue(createAuthContext(staffWithCustomerRead));
       render(
         <MemoryRouter>
@@ -213,6 +222,14 @@ describe('Admin Customer Directory UI (Stage C-4)', () => {
     });
 
     it('hides Customers from sidebar navigation when staff lacks CUSTOMER_READ', () => {
+      vi.spyOn(Grid, 'useBreakpoint').mockReturnValue({
+        md: true,
+        xs: false,
+        sm: true,
+        lg: true,
+        xl: true,
+        xxl: true,
+      });
       vi.mocked(useAuth).mockReturnValue(createAuthContext(staffWithoutCustomerRead));
       render(
         <MemoryRouter>

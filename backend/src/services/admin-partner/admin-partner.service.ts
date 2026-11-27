@@ -11,6 +11,7 @@ import {
   type ISignedUrlResponseDto,
   type IDeletePartnerDocumentResponseDto,
   type IScanOverrideResponseDto,
+  type IReviewPartnerDocumentResponseDto,
   DocumentScanStatus,
   ManualSecurityReviewStatus,
   UserType,
@@ -32,6 +33,8 @@ import type {
   UpdatePartnerProfileInput,
   AdminPartnerAuditLogsQuery,
   ScanOverrideInput,
+  ReviewPartnerDocumentInput,
+  ReactivatePartnerInput,
 } from '../../routes/admin-partner.schemas.js';
 import type { IPrivateDocumentStorageAdapter } from '../storage/private-storage.interface.js';
 import { cloudinaryPrivateStorageAdapter } from '../storage/cloudinary-private-storage.service.js';
@@ -1279,6 +1282,304 @@ export class AdminPartnerService {
     return {
       document: updatedDocDto,
     };
+  }
+
+  /**
+   * API (P1A-08): Review partner KYC document status (VERIFIED / REJECTED)
+   * PATCH /api/v1/admin/partners/:partnerId/documents/:docId/status
+   */
+  public async reviewPartnerDocument(
+    partnerId: string,
+    docId: string,
+    input: ReviewPartnerDocumentInput,
+    staffUser: { id: string; email?: string },
+    auditMetadata?: { correlationId?: string; ipAddress?: string; userAgent?: string },
+  ): Promise<IReviewPartnerDocumentResponseDto> {
+    const partnerObjectId = this.parsePartnerObjectId(partnerId);
+    const docObjectId = this.parseDocumentObjectId(docId);
+    const staffObjectId = new Types.ObjectId(staffUser.id);
+    const targetStatus = input.status;
+
+    const partner = await PartnerModel.findById(partnerObjectId);
+    if (!partner) {
+      throw new AdminPartnerError('Partner not found', 'PARTNER_NOT_FOUND', 404);
+    }
+
+    const documents = Array.isArray(partner.documents) ? partner.documents : [];
+    const doc = documents.find((d) => d._id.toString() === docObjectId.toString());
+    if (!doc || doc.isDeleted) {
+      throw new AdminPartnerError('Document not found', 'DOCUMENT_NOT_FOUND', 404);
+    }
+
+    if (doc.status === targetStatus) {
+      throw new AdminPartnerError(
+        `Document is already ${targetStatus.toLowerCase()}`,
+        'INVALID_DOCUMENT_STATUS_TRANSITION',
+        400,
+      );
+    }
+
+    const now = new Date();
+    const rejectionReason = targetStatus === 'REJECTED' ? input.rejectionReason?.trim() : null;
+
+    const updateResult = await PartnerModel.updateOne(
+      {
+        _id: partnerObjectId,
+        'documents._id': docObjectId,
+        'documents.isDeleted': { $ne: true },
+      },
+      {
+        $set: {
+          'documents.$.status': targetStatus,
+          'documents.$.rejectionReason': rejectionReason,
+          'documents.$.reviewedBy': staffObjectId,
+          'documents.$.reviewedAt': now,
+        },
+      },
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      throw new AdminPartnerError(
+        'Document review status could not be updated due to a concurrent conflict',
+        'CONCURRENT_MODIFICATION',
+        409,
+      );
+    }
+
+    await PartnerAuditLogModel.create({
+      partnerId: partner._id,
+      staffUserId: staffObjectId,
+      action: 'PARTNER_DOCUMENT_STATUS_CHANGED',
+      previousState: {
+        documentId: doc._id.toString(),
+        documentType: doc.documentType,
+        status: doc.status,
+        rejectionReason: doc.rejectionReason ?? null,
+      },
+      newState: {
+        documentId: doc._id.toString(),
+        documentType: doc.documentType,
+        status: targetStatus,
+        rejectionReason,
+        reviewedBy: staffObjectId.toString(),
+        reviewedAt: now.toISOString(),
+      },
+      reason:
+        targetStatus === 'REJECTED'
+          ? `Document rejected: ${rejectionReason}`
+          : `Document approved and marked as VERIFIED`,
+      metadata: {
+        staffEmail: staffUser.email,
+        ipAddress: auditMetadata?.ipAddress,
+        userAgent: auditMetadata?.userAgent,
+        correlationId: auditMetadata?.correlationId,
+      },
+    });
+
+    const updatedDocDto: IPartnerDocumentDto = {
+      id: doc._id.toString(),
+      documentType: doc.documentType,
+      originalFilename: doc.originalFilename,
+      mimeType: doc.mimeType,
+      fileSizeBytes: doc.fileSizeBytes,
+      sha256Hash: doc.sha256Hash,
+      uploadedAt: new Date(doc.uploadedAt).toISOString(),
+      uploadedBy: doc.uploadedBy ? doc.uploadedBy.toString() : '',
+      status: targetStatus as any,
+      rejectionReason: rejectionReason ?? null,
+      reviewedAt: now.toISOString(),
+      reviewedBy: staffObjectId.toString(),
+      expiresAt: doc.expiresAt ? new Date(doc.expiresAt).toISOString() : null,
+      scanStatus: doc.scanStatus,
+      scanGeneration: doc.scanGeneration ?? 1,
+      scannedAt: doc.scannedAt ? new Date(doc.scannedAt).toISOString() : null,
+      scanDetails: doc.scanDetails as IPartnerDocumentDto['scanDetails'],
+      manualSecurityReview: {
+        status: doc.manualSecurityReview?.status ?? ManualSecurityReviewStatus.NOT_REVIEWED,
+        reviewedBy: doc.manualSecurityReview?.reviewedBy?.toString(),
+        reviewedAt: doc.manualSecurityReview?.reviewedAt
+          ? new Date(doc.manualSecurityReview.reviewedAt).toISOString()
+          : undefined,
+        reason: doc.manualSecurityReview?.reason,
+      },
+      notes: doc.notes ?? null,
+      isDeleted: false,
+      deletedAt: null,
+      deletedBy: null,
+    };
+
+    return {
+      document: updatedDocDto,
+    };
+  }
+
+  /**
+   * API (P1A-14): Partner reactivation with structured attestations & supervisory waiver
+   * POST /api/v1/admin/partners/:partnerId/reactivate
+   */
+  public async reactivatePartner(
+    partnerId: string,
+    input: ReactivatePartnerInput,
+    staffUser: { id: string; email?: string; permissions?: string[]; roles?: string[] },
+    auditMetadata?: { correlationId?: string; ipAddress?: string; userAgent?: string },
+  ): Promise<IPartnerAdminDetailDto> {
+    const partnerObjectId = this.parsePartnerObjectId(partnerId);
+    const staffObjectId = new Types.ObjectId(staffUser.id);
+    const partner = await PartnerModel.findById(partnerObjectId);
+
+    if (!partner) {
+      throw new AdminPartnerError('Partner not found', 'PARTNER_NOT_FOUND', 404);
+    }
+
+    const currentStatus = partner.status;
+    if (currentStatus === 'ACTIVE' || currentStatus === 'PENDING_VERIFICATION') {
+      throw new AdminPartnerError(
+        `Partner is already ${currentStatus.toLowerCase()} and cannot be reactivated`,
+        'INVALID_STATE_TRANSITION',
+        400,
+      );
+    }
+
+    // 1. Mandatory Fulfillment Coverage Invariant: Partner must have >= 1 ACTIVE service area
+    const serviceAreaIds = Array.isArray(partner.serviceAreaIds) ? partner.serviceAreaIds : [];
+    if (serviceAreaIds.length === 0) {
+      throw new AdminPartnerError(
+        'Cannot reactivate partner with zero active service areas. Assign at least one active service hub before reactivation.',
+        'NO_ACTIVE_SERVICE_AREA',
+        400,
+      );
+    }
+
+    const activeHubsCount = await ServiceAreaModel.countDocuments({
+      _id: { $in: serviceAreaIds },
+      isActive: true,
+    });
+    if (activeHubsCount === 0) {
+      throw new AdminPartnerError(
+        'All assigned service areas are inactive. Partner must be assigned to at least one active hub for reactivation.',
+        'NO_ACTIVE_SERVICE_AREA',
+        400,
+      );
+    }
+
+    // 2. Document Compliance & Malware Quarantine Checks
+    const rawDocs = Array.isArray(partner.documents) ? partner.documents : [];
+    const nonDeletedDocs = rawDocs.filter((d) => !d.isDeleted);
+
+    // Unconditional malware quarantine: Cannot waive infected files
+    const hasInfected = nonDeletedDocs.some((d) => d.scanStatus === DocumentScanStatus.INFECTED);
+    if (hasInfected) {
+      throw new AdminPartnerError(
+        'Partner possesses infected statutory documents in quarantine. Reactivation is strictly blocked.',
+        'DOCUMENT_QUARANTINED',
+        403,
+      );
+    }
+
+    // Check for at least one eligible KYC document
+    const eligibleDoc = nonDeletedDocs.find(
+      (d) => d.status === 'VERIFIED' && isKycDocumentEligible(d, 'REACTIVATION').eligible,
+    );
+
+    const isWaiverRequested = Boolean(input.waiver?.granted);
+    let isSupervisoryWaiver = false;
+
+    if (!eligibleDoc) {
+      if (!isWaiverRequested) {
+        throw new AdminPartnerError(
+          'Reactivation requires at least one verified, security-cleared KYC document or an authorized supervisory waiver.',
+          'KYC_VERIFICATION_REQUIRED',
+          400,
+        );
+      }
+
+      // Verify supervisory authorization (Must have RBAC_MANAGE or SUPER_ADMIN)
+      const isSuperAdmin = staffUser.roles?.includes('SUPER_ADMIN') ?? false;
+      const hasRbacManage = staffUser.permissions?.includes('rbac:manage') ?? false;
+      if (!isSuperAdmin && !hasRbacManage) {
+        throw new AdminPartnerError(
+          'Supervisory waiver reactivation requires RBAC_MANAGE permission.',
+          'FORBIDDEN',
+          403,
+        );
+      }
+
+      const waiverReason = input.waiver?.reason?.trim() || '';
+      if (waiverReason.length < 20) {
+        throw new AdminPartnerError(
+          'Supervisory waiver justification reason must be at least 20 characters.',
+          'VALIDATION_ERROR',
+          400,
+        );
+      }
+
+      isSupervisoryWaiver = true;
+    }
+
+    const reason = input.reason.trim();
+
+    // 3. Transactional Status Mutation
+    await withTransaction(async (session) => {
+      const updated = await PartnerModel.findOneAndUpdate(
+        { _id: partnerObjectId, status: currentStatus },
+        { $set: { status: 'ACTIVE' } },
+        { session, new: true },
+      );
+
+      if (!updated) {
+        throw new AdminPartnerError(
+          'Partner status was concurrently modified by another transaction',
+          'CONCURRENT_MODIFICATION',
+          409,
+        );
+      }
+
+      // Record PARTNER_REACTIVATED audit log
+      await PartnerAuditLogModel.create(
+        [
+          {
+            partnerId: partnerObjectId,
+            staffUserId: staffObjectId,
+            action: 'PARTNER_REACTIVATED',
+            previousState: { status: currentStatus },
+            newState: { status: 'ACTIVE' },
+            reason,
+            metadata: {
+              staffEmail: staffUser.email,
+              ipAddress: auditMetadata?.ipAddress,
+              userAgent: auditMetadata?.userAgent,
+              correlationId: auditMetadata?.correlationId,
+            },
+          },
+        ],
+        { session },
+      );
+
+      // If supervisory waiver granted, record separate PARTNER_REACTIVATION_WAIVER_GRANTED audit log
+      if (isSupervisoryWaiver && input.waiver) {
+        await PartnerAuditLogModel.create(
+          [
+            {
+              partnerId: partnerObjectId,
+              staffUserId: staffObjectId,
+              action: 'PARTNER_REACTIVATION_WAIVER_GRANTED',
+              previousState: { status: currentStatus },
+              newState: { status: 'ACTIVE', waiver: true },
+              reason: input.waiver.reason.trim(),
+              metadata: {
+                staffEmail: staffUser.email,
+                ipAddress: auditMetadata?.ipAddress,
+                userAgent: auditMetadata?.userAgent,
+                correlationId: auditMetadata?.correlationId,
+              },
+            },
+          ],
+          { session },
+        );
+      }
+    });
+
+    return this.getPartnerById(partnerId);
   }
 }
 

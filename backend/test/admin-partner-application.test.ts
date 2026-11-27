@@ -14,6 +14,7 @@ import { TokenService } from '../src/services/token/token.service.js';
 import { serviceAreaService } from '../src/services/service-area/service-area.service.js';
 import { partnerApplicationService } from '../src/services/partner-application/partner-application.service.js';
 import { withTransaction } from '../src/database/transaction.js';
+import { registerTestFixture } from '../src/database/test-guard.js';
 import { UserType, UserStatus, PermissionCode, DeliveryMode } from '@thehomez/shared-types';
 
 describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval & Dual-Level Concurrency', () => {
@@ -69,6 +70,40 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
     app = createApp();
 
     if (isDbConnected) {
+      // 0. Clean any leftover fixtures from previous aborted test runs by explicit _id constraint
+      const oldSAs = await ServiceAreaModel.find(
+        { code: { $in: [/^TEST-APP-SA-/i, /^TEST-SCENARIO-/i] } },
+        { _id: 1 },
+      ).lean();
+      if (oldSAs.length > 0) {
+        for (const sa of oldSAs) registerTestFixture('ServiceArea', sa._id);
+        await ServiceAreaModel.deleteMany({ _id: { $in: oldSAs.map((d: any) => d._id) } });
+      }
+
+      const oldRoles = await RoleModel.find({ code: /^TEST_APP_/i }, { _id: 1 }).lean();
+      if (oldRoles.length > 0) {
+        for (const r of oldRoles) registerTestFixture('Role', r._id);
+        await RoleModel.deleteMany({ _id: { $in: oldRoles.map((d: any) => d._id) } });
+      }
+
+      const oldUsers = await UserModel.find({ phone: /^\+919666/ }, { _id: 1 }).lean();
+      if (oldUsers.length > 0) {
+        for (const u of oldUsers) registerTestFixture('User', u._id);
+        await UserModel.deleteMany({ _id: { $in: oldUsers.map((d: any) => d._id) } });
+      }
+
+      const oldPartners = await PartnerModel.find({ phone: /^\+919666/ }, { _id: 1 }).lean();
+      if (oldPartners.length > 0) {
+        for (const p of oldPartners) registerTestFixture('Partner', p._id);
+        await PartnerModel.deleteMany({ _id: { $in: oldPartners.map((d: any) => d._id) } });
+      }
+
+      const oldApps = await PartnerApplicationModel.find({ phone: /^\+919666/ }, { _id: 1 }).lean();
+      if (oldApps.length > 0) {
+        for (const a of oldApps) registerTestFixture('PartnerApplication', a._id);
+        await PartnerApplicationModel.deleteMany({ _id: { $in: oldApps.map((d: any) => d._id) } });
+      }
+
       // Attach post-save hooks to track all created documents in this suite
       ServiceAreaModel.schema.post('save', function (doc: any) {
         if (doc && doc._id) createdServiceAreaIds.push(doc._id);
@@ -166,7 +201,7 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
         status: UserStatus.ACTIVE,
         roles: ['TEST_APP_SUPER'],
       });
-      superAdminToken = tokenService.signAccessToken(superAdminUser);
+      superAdminToken = tokenService.signAccessToken(superAdminUser, 'session-superadmin');
 
       onboarderStaff = await UserModel.create({
         phone: '+919666000002',
@@ -175,7 +210,7 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
         status: UserStatus.ACTIVE,
         roles: ['TEST_APP_ONBOARD_ONLY'],
       });
-      onboarderToken = tokenService.signAccessToken(onboarderStaff);
+      onboarderToken = tokenService.signAccessToken(onboarderStaff, 'session-onboarder');
 
       verifierStaff = await UserModel.create({
         phone: '+919666000003',
@@ -184,7 +219,7 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
         status: UserStatus.ACTIVE,
         roles: ['TEST_APP_VERIFY_ONLY'],
       });
-      verifierToken = tokenService.signAccessToken(verifierStaff);
+      verifierToken = tokenService.signAccessToken(verifierStaff, 'session-verifier');
 
       readerStaff = await UserModel.create({
         phone: '+919666000004',
@@ -193,7 +228,7 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
         status: UserStatus.ACTIVE,
         roles: ['TEST_APP_READ_ONLY'],
       });
-      readerToken = tokenService.signAccessToken(readerStaff);
+      readerToken = tokenService.signAccessToken(readerStaff, 'session-reader');
 
       staffNoPerm = await UserModel.create({
         phone: '+919666000005',
@@ -202,7 +237,7 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
         status: UserStatus.ACTIVE,
         roles: ['TEST_APP_NO_PERM'],
       });
-      _staffNoPermToken = tokenService.signAccessToken(staffNoPerm);
+      _staffNoPermToken = tokenService.signAccessToken(staffNoPerm, 'session-noperm');
 
       // 4. Create Customer User & Token
       regularCustomer = await UserModel.create({
@@ -234,6 +269,25 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
       });
       _existingPartnerToken = tokenService.signAccessToken(existingPartnerUser);
     }
+  });
+
+  beforeEach(() => {
+    vi.spyOn(TokenService.prototype, 'validateAdminSession').mockImplementation(
+      async (sessionId: string) => {
+        let matchedUserId = superAdminUser._id;
+        if (sessionId === 'session-onboarder') matchedUserId = onboarderStaff._id;
+        if (sessionId === 'session-verifier') matchedUserId = verifierStaff._id;
+        if (sessionId === 'session-reader') matchedUserId = readerStaff._id;
+        if (sessionId === 'session-noperm') matchedUserId = staffNoPerm._id;
+        return {
+          _id: sessionId,
+          userId: matchedUserId,
+          isRevoked: false,
+          absoluteExpiresAt: new Date(Date.now() + 86400000),
+          lastActivityAt: new Date(),
+        } as any;
+      },
+    );
   });
 
   afterEach(() => {
@@ -582,10 +636,7 @@ describe('Stage C-11.2B: Partner Application Lifecycle, Transactional Approval &
     it('retrieves paginated application directory and detail by ID', async () => {
       const resList = await request(app)
         .get('/api/v1/admin/partner-applications?limit=5')
-        .set(
-          'Authorization',
-          `Bearer ${readerStaff ? tokenService.signAccessToken(readerStaff) : superAdminToken}`,
-        );
+        .set('Authorization', `Bearer ${readerToken}`);
 
       expect(resList.status).toBe(200);
       expect(resList.body.data.items).toBeDefined();

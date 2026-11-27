@@ -209,6 +209,31 @@ export class CloudinaryPrivateStorageAdapter implements IPrivateDocumentStorageA
     }
   }
 
+  private async fetchAllResourcesForType(
+    resourceType: 'image' | 'raw',
+    prefix: string,
+  ): Promise<any[]> {
+    const resources: any[] = [];
+    let nextCursor: string | undefined = undefined;
+
+    do {
+      const response: any = await cloudinary.api.resources({
+        type: 'authenticated',
+        resource_type: resourceType,
+        prefix,
+        max_results: 500,
+        next_cursor: nextCursor,
+      });
+
+      if (response && Array.isArray(response.resources)) {
+        resources.push(...response.resources);
+      }
+      nextCursor = response?.next_cursor;
+    } while (nextCursor);
+
+    return resources;
+  }
+
   public async listStorageObjects(prefix: string): Promise<IStorageObjectMeta[]> {
     if (!this.configureSdk()) {
       throw new PrivateStorageError(
@@ -219,26 +244,12 @@ export class CloudinaryPrivateStorageAdapter implements IPrivateDocumentStorageA
     }
 
     try {
-      const [imagesRes, rawRes] = await Promise.all([
-        cloudinary.api
-          .resources({
-            type: 'authenticated',
-            resource_type: 'image',
-            prefix,
-            max_results: 500,
-          })
-          .catch(() => ({ resources: [] })),
-        cloudinary.api
-          .resources({
-            type: 'authenticated',
-            resource_type: 'raw',
-            prefix,
-            max_results: 500,
-          })
-          .catch(() => ({ resources: [] })),
+      const [images, raw] = await Promise.all([
+        this.fetchAllResourcesForType('image', prefix),
+        this.fetchAllResourcesForType('raw', prefix),
       ]);
 
-      const allResources = [...(imagesRes.resources || []), ...(rawRes.resources || [])];
+      const allResources = [...images, ...raw];
 
       return allResources.map((res: { public_id: string; bytes: number; created_at: string; context?: { custom?: Record<string, string> } }) => ({
         key: res.public_id,

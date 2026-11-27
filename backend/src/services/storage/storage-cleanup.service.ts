@@ -511,4 +511,5 @@ export class StorageCleanupError extends Error {
 }
 
 export const storageCleanupService = new StorageCleanupService();
+export { StorageCleanupWorker } from './storage-cleanup-worker.js';
 

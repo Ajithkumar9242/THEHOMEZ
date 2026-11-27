@@ -24,7 +24,10 @@ import {
   adminPartnerDocParamSchema,
   emptyQuerySchema,
   scanOverrideSchema,
+  reviewPartnerDocumentSchema,
+  reactivatePartnerSchema,
 } from './admin-partner.schemas.js';
+import { assignPartnerServiceAreasSchema } from './service-area.schemas.js';
 
 /**
  * Creates and configures the Express router for administrative partner operations.
@@ -142,6 +145,45 @@ export function createAdminPartnerRouter(
     validateQuery(emptyQuerySchema),
     validateBody(scanOverrideSchema),
     controller.overrideDocumentScanStatus,
+  );
+
+  // API (P1A-15): Partner KYC document review (verify or reject)
+  router.patch(
+    '/:partnerId/documents/:docId/status',
+    apiLimiter,
+    authenticate,
+    staffOnlyGuard,
+    authorize(PermissionCode.PARTNER_VERIFY),
+    validateParams(adminPartnerDocParamSchema),
+    validateQuery(emptyQuerySchema),
+    validateBody(reviewPartnerDocumentSchema),
+    controller.reviewPartnerDocument,
+  );
+
+  // API (P1A-14): Partner reactivation with KYC proof validation and supervisory waiver
+  router.post(
+    '/:partnerId/reactivate',
+    apiLimiter,
+    authenticate,
+    staffOnlyGuard,
+    authorize(PermissionCode.PARTNER_VERIFY),
+    validateParams(adminPartnerIdParamSchema),
+    validateQuery(emptyQuerySchema),
+    validateBody(reactivatePartnerSchema),
+    controller.reactivatePartner,
+  );
+
+  // API (P1A-16): Dedicated administrative partner service area assignment
+  router.put(
+    '/:partnerId/service-areas',
+    apiLimiter,
+    authenticate,
+    staffOnlyGuard,
+    authorize(PermissionCode.SERVICE_AREA_WRITE),
+    validateParams(adminPartnerIdParamSchema),
+    validateQuery(emptyQuerySchema),
+    validateBody(assignPartnerServiceAreasSchema),
+    controller.assignPartnerServiceAreas,
   );
 
   return router;

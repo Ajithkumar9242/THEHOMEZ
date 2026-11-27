@@ -4,11 +4,14 @@ import {
   adminPartnerService,
   type AdminPartnerService,
 } from '../services/admin-partner/admin-partner.service.js';
+import { serviceAreaService } from '../services/service-area/service-area.service.js';
 import type {
   AdminPartnerQuery,
   UpdatePartnerStatusInput,
   UpdatePartnerProfileInput,
   AdminPartnerAuditLogsQuery,
+  ReviewPartnerDocumentInput,
+  ReactivatePartnerInput,
 } from '../routes/admin-partner.schemas.js';
 
 export class AdminPartnerController {
@@ -271,6 +274,119 @@ export class AdminPartnerController {
         success: true,
         data: result,
       };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  /**
+   * API (P1A-15): Partner KYC document review (verify or reject)
+   * PATCH /api/v1/admin/partners/:partnerId/documents/:docId/status
+   */
+  public reviewPartnerDocument = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const partnerId = String(req.params.partnerId);
+      const docId = String(req.params.docId);
+      const input = req.body as ReviewPartnerDocumentInput;
+      const staffUser = {
+        id: req.user!.id,
+        email: req.user?.email,
+      };
+      const auditMetadata = {
+        correlationId: req.correlationId,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      };
+
+      const result = await this.service.reviewPartnerDocument(
+        partnerId,
+        docId,
+        input,
+        staffUser,
+        auditMetadata,
+      );
+
+      const response: IApiResponse<typeof result> = {
+        success: true,
+        data: result,
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  /**
+   * API (P1A-14): Partner reactivation with KYC proof validation and supervisory waiver
+   * POST /api/v1/admin/partners/:partnerId/reactivate
+   */
+  public reactivatePartner = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const partnerId = String(req.params.partnerId);
+      const input = req.body as ReactivatePartnerInput;
+      const staffUser = {
+        id: req.user!.id,
+        email: req.user!.email,
+        phone: req.user!.phone,
+        roles: req.user!.roles,
+        permissions: req.user!.permissions,
+      };
+      const auditMetadata = {
+        correlationId: req.correlationId,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      };
+
+      const result = await this.service.reactivatePartner(
+        partnerId,
+        input,
+        staffUser,
+        auditMetadata,
+      );
+
+      const response: IApiResponse<typeof result> = {
+        success: true,
+        data: result,
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  /**
+   * API (P1A-16): Administrative assign service areas to a partner
+   * PUT /api/v1/admin/partners/:partnerId/service-areas
+   */
+  public assignPartnerServiceAreas = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const partnerId = String(req.params.partnerId);
+      const partner = await serviceAreaService.assignPartnerServiceAreas(
+        partnerId,
+        req.body.serviceAreaIds,
+      );
+
+      const response: IApiResponse<{ partnerId: string; serviceAreaIds: string[] }> = {
+        success: true,
+        data: {
+          partnerId: partner._id.toString(),
+          serviceAreaIds: partner.serviceAreaIds.map((id) => id.toString()),
+        },
+      };
+
       res.status(200).json(response);
     } catch (err) {
       next(err);

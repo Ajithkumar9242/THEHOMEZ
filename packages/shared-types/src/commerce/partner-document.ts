@@ -159,3 +159,18 @@ export interface IStorageCleanupJobRetryResponseDto {
   job: IStorageCleanupJobDto;
 }
 
+/**
+ * Request payload for reviewing a partner KYC document (PATCH /status).
+ */
+export interface IReviewPartnerDocumentRequestDto {
+  status: DocumentReviewStatus.VERIFIED | DocumentReviewStatus.REJECTED;
+  rejectionReason?: string;
+}
+
+/**
+ * Response payload for reviewing a partner KYC document.
+ */
+export interface IReviewPartnerDocumentResponseDto {
+  document: IPartnerDocumentDto;
+}
+

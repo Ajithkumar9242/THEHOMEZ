@@ -14,6 +14,9 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import {
   ArrowLeftOutlined,
+  CheckCircleOutlined,
+  EditOutlined,
+  EnvironmentOutlined,
   ExclamationCircleOutlined,
   StopOutlined,
   UsergroupAddOutlined,
@@ -32,6 +35,10 @@ import { PartnerDeliveryModeBadge } from '../components/PartnerDeliveryModeBadge
 import { PartnerError } from '../components/PartnerError.js';
 import { PartnerStatusActionModal } from '../components/PartnerStatusActionModal.js';
 import { PartnerAuditHistoryTable } from '../components/PartnerAuditHistoryTable.js';
+import { EditPartnerProfileDrawer } from '../components/EditPartnerProfileDrawer.js';
+import { PartnerReactivateModal } from '../components/PartnerReactivateModal.js';
+import { ManagePartnerServiceAreasModal } from '../components/ManagePartnerServiceAreasModal.js';
+import { PartnerDocumentManager } from '../components/PartnerDocumentManager.js';
 import { usePartnerDetail } from '../hooks/usePartnerDetail.js';
 import { usePartnerAuditLogs } from '../hooks/usePartnerAuditLogs.js';
 
@@ -61,6 +68,9 @@ export function PartnerDetailPage() {
   const canRead = user?.permissions.includes(PermissionCode.PARTNER_READ) ?? false;
   const canVerify = user?.permissions.includes(PermissionCode.PARTNER_VERIFY) ?? false;
   const canSuspend = user?.permissions.includes(PermissionCode.PARTNER_SUSPEND) ?? false;
+  const canWrite = user?.permissions.includes(PermissionCode.PARTNER_WRITE) ?? false;
+  const canManageServiceAreas =
+    user?.permissions.includes(PermissionCode.SERVICE_AREA_WRITE) ?? false;
 
   const {
     partner,
@@ -83,6 +93,9 @@ export function PartnerDetailPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [targetStatus, setTargetStatus] = useState<PartnerStatus | null>(null);
+  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  const [reactivateModalOpen, setReactivateModalOpen] = useState(false);
+  const [serviceAreasModalOpen, setServiceAreasModalOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
     null,
   );
@@ -153,6 +166,10 @@ export function PartnerDetailPage() {
     (partner?.status === 'ACTIVE' ||
       partner?.status === 'PENDING_VERIFICATION' ||
       partner?.status === 'INACTIVE');
+
+  const canReactivate =
+    canVerify &&
+    (partner?.status === 'INACTIVE' || partner?.status === 'SUSPENDED');
 
   const serviceAreaColumns: ColumnsType<IPartnerServiceAreaDetailDto> = [
     {
@@ -262,6 +279,29 @@ export function PartnerDetailPage() {
                 ID: {partner.id}
               </Tag>
 
+              {/* Edit Profile Button */}
+              {canWrite && (
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => setEditDrawerOpen(true)}
+                  aria-label="Edit partner profile"
+                >
+                  Edit Profile
+                </Button>
+              )}
+
+              {/* Reactivate Organization Button */}
+              {canReactivate && (
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => setReactivateModalOpen(true)}
+                  aria-label="Reactivate organization"
+                >
+                  Reactivate Organization
+                </Button>
+              )}
+
               {/* Status Action Buttons */}
               {canTransitionToInactive && (
                 <Button
@@ -291,6 +331,17 @@ export function PartnerDetailPage() {
             title="Section A: Business Overview"
             variant="borderless"
             className="catalogue-card"
+            extra={
+              canWrite && (
+                <Button
+                  type="link"
+                  icon={<EditOutlined />}
+                  onClick={() => setEditDrawerOpen(true)}
+                >
+                  Edit
+                </Button>
+              )
+            }
           >
             <Descriptions
               column={{ xs: 1, sm: 2, lg: 3 }}
@@ -353,6 +404,17 @@ export function PartnerDetailPage() {
             title={`Section B: Service Areas (${partner.serviceAreas?.length ?? 0})`}
             variant="borderless"
             className="catalogue-card"
+            extra={
+              canManageServiceAreas && (
+                <Button
+                  type="link"
+                  icon={<EnvironmentOutlined />}
+                  onClick={() => setServiceAreasModalOpen(true)}
+                >
+                  Manage Hubs
+                </Button>
+              )
+            }
           >
             <Table<IPartnerServiceAreaDetailDto>
               rowKey="id"
@@ -366,9 +428,18 @@ export function PartnerDetailPage() {
             />
           </Card>
 
-          {/* Section C: Linked Accounts */}
+          {/* Section C: KYC Compliance Documents */}
+          <PartnerDocumentManager
+            partnerId={partner.id}
+            onDocumentChange={() => {
+              void refreshDetail();
+              void refreshAuditLogs();
+            }}
+          />
+
+          {/* Section D: Linked Accounts */}
           <Card
-            title="Section C: Linked Tenant Accounts"
+            title="Section D: Linked Tenant Accounts"
             variant="borderless"
             className="catalogue-card"
           >
@@ -414,9 +485,9 @@ export function PartnerDetailPage() {
             </Card>
           )}
 
-          {/* Section D: Lifecycle Audit History */}
+          {/* Section E: Lifecycle Audit History */}
           <Card
-            title={`Section D: Lifecycle Status Change History (${auditTotal})`}
+            title={`Section E: Lifecycle Status Change History (${auditTotal})`}
             variant="borderless"
             className="catalogue-card"
           >
@@ -441,6 +512,51 @@ export function PartnerDetailPage() {
             }}
             onSuccess={handlePartnerUpdated}
             onConcurrentModification={handleConcurrentConflict}
+          />
+
+          {/* Edit Profile Drawer */}
+          <EditPartnerProfileDrawer
+            open={editDrawerOpen}
+            partner={partner}
+            onClose={() => setEditDrawerOpen(false)}
+            onSuccess={(updated) => {
+              setPartner(updated);
+              setFeedback({
+                type: 'success',
+                message: 'Partner profile updated successfully.',
+              });
+              void refreshAuditLogs();
+            }}
+          />
+
+          {/* Reactivate Modal */}
+          <PartnerReactivateModal
+            open={reactivateModalOpen}
+            partner={partner}
+            onClose={() => setReactivateModalOpen(false)}
+            onSuccess={(updated) => {
+              setPartner(updated);
+              setFeedback({
+                type: 'success',
+                message: 'Partner reactivated successfully.',
+              });
+              void refreshAuditLogs();
+            }}
+          />
+
+          {/* Manage Service Areas Modal */}
+          <ManagePartnerServiceAreasModal
+            open={serviceAreasModalOpen}
+            partner={partner}
+            onClose={() => setServiceAreasModalOpen(false)}
+            onSuccess={(_hubIds) => {
+              void refreshDetail();
+              setFeedback({
+                type: 'success',
+                message: 'Partner service area hubs updated successfully.',
+              });
+              void refreshAuditLogs();
+            }}
           />
         </Space>
       ) : null}

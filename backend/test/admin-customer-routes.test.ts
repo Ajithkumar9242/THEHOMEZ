@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import type { Application } from 'express';
 import { Types } from 'mongoose';
@@ -7,10 +7,12 @@ import { connectDatabase, disconnectDatabase } from '../src/database/database.js
 import { UserModel, type IUserDocument } from '../src/models/user.model.js';
 import { CustomerAddressModel } from '../src/models/customer-address.model.js';
 import { ServiceAreaModel } from '../src/models/service-area.model.js';
+import { PartnerModel } from '../src/models/partner.model.js';
 import { RefreshTokenModel } from '../src/models/refresh-token.model.js';
 import { CustomerAuditLogModel } from '../src/models/customer-audit-log.model.js';
 import { RoleModel } from '../src/models/role.model.js';
 import { TokenService } from '../src/services/token/token.service.js';
+import { registerTestFixture } from '../src/database/test-guard.js';
 import { UserType, UserStatus, PermissionCode } from '@thehomez/shared-types';
 
 describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
@@ -43,6 +45,7 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
 
   let partnerUser: IUserDocument;
   let partnerToken: string;
+  let testPartnerDoc: any;
 
   // Service Area Fixtures
   let _testServiceArea: InstanceType<typeof ServiceAreaModel>;
@@ -66,6 +69,36 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
     app = createApp();
 
     if (isDbConnected) {
+      // 0. Clean any leftover fixtures from previous aborted test runs
+      const oldTokens = await RefreshTokenModel.find({ familyId: /^family_cust_/i }, { _id: 1 }).lean();
+      if (oldTokens.length > 0) {
+        for (const t of oldTokens) registerTestFixture('RefreshToken', t._id);
+        await RefreshTokenModel.deleteMany({ _id: { $in: oldTokens.map((d: any) => d._id) } });
+      }
+      const oldUsers = await UserModel.find(
+        { phone: { $in: ['+919988000001', '+919988000002', '+919988000003', '+919988000004', '+919988000005', '+919988000006', '+919988111111', '+919988222222', '+919988333333'] } },
+        { _id: 1 }
+      ).lean();
+      if (oldUsers.length > 0) {
+        for (const u of oldUsers) registerTestFixture('User', u._id);
+        await UserModel.deleteMany({ _id: { $in: oldUsers.map((d: any) => d._id) } });
+      }
+      const oldRoles = await RoleModel.find({ code: /^TEST_ADMIN_CUST_/i }, { _id: 1 }).lean();
+      if (oldRoles.length > 0) {
+        for (const r of oldRoles) registerTestFixture('Role', r._id);
+        await RoleModel.deleteMany({ _id: { $in: oldRoles.map((d: any) => d._id) } });
+      }
+      const oldSAs = await ServiceAreaModel.find({ code: 'TEST-CUST-SA-1' }, { _id: 1 }).lean();
+      if (oldSAs.length > 0) {
+        for (const sa of oldSAs) registerTestFixture('ServiceArea', sa._id);
+        await ServiceAreaModel.deleteMany({ _id: { $in: oldSAs.map((d: any) => d._id) } });
+      }
+      const oldPartners = await PartnerModel.find({ phone: '+919988000006' }, { _id: 1 }).lean();
+      if (oldPartners.length > 0) {
+        for (const p of oldPartners) registerTestFixture('Partner', p._id);
+        await PartnerModel.deleteMany({ _id: { $in: oldPartners.map((d: any) => d._id) } });
+      }
+
       CustomerAddressModel.schema.post('save', function (doc: any) {
         if (doc?._id) createdAddressIds.push(doc._id);
       });
@@ -84,6 +117,16 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
         state: 'Karnataka',
         pincodes: ['560001', '560025'],
         isActive: true,
+      });
+
+      // 1b. Partner document for PARTNER user authentication checks
+      testPartnerDoc = await PartnerModel.create({
+        businessName: 'Test Customer Module Partner',
+        phone: '+919988000006',
+        email: 'partner-cust@thehomez.in',
+        serviceAreaIds: [_testServiceArea._id],
+        status: 'ACTIVE',
+        coverageVersion: 0,
       });
 
       // 2. Roles
@@ -168,7 +211,7 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
           email: 'partner-cust@thehomez.in',
           userType: UserType.PARTNER,
           status: UserStatus.ACTIVE,
-          partnerId: new Types.ObjectId(),
+          partnerId: testPartnerDoc._id,
           roles: [],
         },
         {
@@ -209,11 +252,11 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
       b2bCustomer = createdUsers[7]!;
       suspendedCustomer = createdUsers[8]!;
 
-      superAdminToken = tokenService.signAccessToken(superAdminUser);
-      customerReaderToken = tokenService.signAccessToken(customerReaderStaff);
-      staffNoCustomerPermToken = tokenService.signAccessToken(staffNoCustomerPerm);
-      b2bVerifierToken = tokenService.signAccessToken(b2bVerifierStaff);
-      customerSuspenderToken = tokenService.signAccessToken(customerSuspenderStaff);
+      superAdminToken = tokenService.signAccessToken(superAdminUser, 'session-superadmin-cust');
+      customerReaderToken = tokenService.signAccessToken(customerReaderStaff, 'session-reader-cust');
+      staffNoCustomerPermToken = tokenService.signAccessToken(staffNoCustomerPerm, 'session-noperm-cust');
+      b2bVerifierToken = tokenService.signAccessToken(b2bVerifierStaff, 'session-b2b-cust');
+      customerSuspenderToken = tokenService.signAccessToken(customerSuspenderStaff, 'session-suspender-cust');
       partnerToken = tokenService.signAccessToken(partnerUser);
       regularCustomerToken = tokenService.signAccessToken(regularCustomer);
 
@@ -258,7 +301,7 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
 
       // 7. Active Refresh Tokens for regular customer
       await RefreshTokenModel.create({
-        tokenHash: 'dummy_active_refresh_hash_1',
+        tokenHash: `dummy_active_refresh_hash_${Date.now()}_${Math.random().toString(36).substring(2)}`,
         userId: regularCustomer._id,
         userType: UserType.CUSTOMER,
         familyId: 'family_cust_1',
@@ -270,33 +313,68 @@ describe('Stage C-2: Backend Admin Customer APIs & Contract Tests', () => {
     }
   }, 120000);
 
+  beforeEach(() => {
+    vi.spyOn(TokenService.prototype, 'validateAdminSession').mockImplementation(
+      async (sessionId: string) => {
+        let matchedUserId = superAdminUser._id;
+        if (sessionId === 'session-reader-cust') matchedUserId = customerReaderStaff._id;
+        if (sessionId === 'session-noperm-cust') matchedUserId = staffNoCustomerPerm._id;
+        if (sessionId === 'session-b2b-cust') matchedUserId = b2bVerifierStaff._id;
+        if (sessionId === 'session-suspender-cust') matchedUserId = customerSuspenderStaff._id;
+        return {
+          _id: sessionId,
+          userId: matchedUserId,
+          isRevoked: false,
+          absoluteExpiresAt: new Date(Date.now() + 86400000),
+          lastActivityAt: new Date(),
+        } as any;
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   afterAll(async () => {
     if (isDbConnected) {
       if (createdAuditLogIds.length > 0) {
         const ids = [...createdAuditLogIds];
         createdAuditLogIds.length = 0;
+        for (const id of ids) registerTestFixture('CustomerAuditLog', id);
         await CustomerAuditLogModel.deleteMany({ _id: { $in: ids } });
       }
       if (createdAddressIds.length > 0) {
         const ids = [...createdAddressIds];
         createdAddressIds.length = 0;
+        for (const id of ids) registerTestFixture('CustomerAddress', id);
         await CustomerAddressModel.deleteMany({ _id: { $in: ids } });
       }
       if (createdTokenIds.length > 0) {
         const ids = [...createdTokenIds];
         createdTokenIds.length = 0;
+        for (const id of ids) registerTestFixture('RefreshToken', id);
         await RefreshTokenModel.deleteMany({ _id: { $in: ids } });
       }
       if (createdUserIds.length > 0) {
         const ids = [...createdUserIds];
         createdUserIds.length = 0;
+        for (const id of ids) registerTestFixture('User', id);
         await UserModel.deleteMany({ _id: { $in: ids } });
       }
       if (_testServiceArea?._id) {
+        registerTestFixture('ServiceArea', _testServiceArea._id);
         await ServiceAreaModel.deleteMany({ _id: _testServiceArea._id });
       }
+      if (testPartnerDoc?._id) {
+        registerTestFixture('Partner', testPartnerDoc._id);
+        await PartnerModel.deleteMany({ _id: testPartnerDoc._id });
+      }
       if (createdRoleIds.length > 0) {
-        await RoleModel.deleteMany({ _id: { $in: createdRoleIds } });
+        const ids = [...createdRoleIds];
+        createdRoleIds.length = 0;
+        for (const id of ids) registerTestFixture('Role', id);
+        await RoleModel.deleteMany({ _id: { $in: ids } });
       }
       await disconnectDatabase();
     }

@@ -13,23 +13,24 @@ import { assignPartnerServiceAreasSchema } from './service-area.schemas.js';
 export const partnerRouter: Router = Router();
 
 /**
- * Administrative: Assign or update service areas for a partner
+ * Administrative (Legacy Deprecated): Assign or update service areas for a partner
  * PUT /api/v1/partners/:partnerId/service-areas
+ * Deprecated in favor of PUT /api/v1/admin/partners/:partnerId/service-areas
  */
 partnerRouter.put(
   '/:partnerId/service-areas',
   authenticate,
   staffOnlyGuard,
-  authorize(
-    [
-      PermissionCode.SERVICE_AREA_WRITE,
-      PermissionCode.PARTNER_VERIFY,
-      PermissionCode.PARTNER_ONBOARD,
-    ],
-    { mode: 'ANY' },
-  ),
+  authorize(PermissionCode.SERVICE_AREA_WRITE),
   validateBody(assignPartnerServiceAreasSchema),
-  (req, res, next) => serviceAreaController.assignPartnerServiceAreas(req, res, next),
+  (req, res, next) => {
+    res.setHeader('Deprecation', 'true');
+    res.setHeader(
+      'Warning',
+      '299 - "Use PUT /api/v1/admin/partners/:partnerId/service-areas instead"',
+    );
+    serviceAreaController.assignPartnerServiceAreas(req, res, next);
+  },
 );
 
 /**

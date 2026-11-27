@@ -133,3 +133,29 @@ export interface IAdminPartnerAuditLogListResponseDto {
     hasPrevPage: boolean;
   };
 }
+
+/**
+ * Attestations required for partner reactivation.
+ */
+export interface IPartnerReactivationAttestations {
+  identityVerified: boolean;
+  addressVerified: boolean;
+  activeHubsConfirmed: boolean;
+}
+
+/**
+ * Supervisory waiver for partner reactivation when proofs are pending or unavailable.
+ */
+export interface IPartnerSupervisoryWaiver {
+  granted: boolean;
+  reason: string;
+}
+
+/**
+ * Request payload for partner reactivation (POST /api/v1/admin/partners/:partnerId/reactivate).
+ */
+export interface IReactivatePartnerDto {
+  reason: string;
+  attestations: IPartnerReactivationAttestations;
+  waiver?: IPartnerSupervisoryWaiver;
+}

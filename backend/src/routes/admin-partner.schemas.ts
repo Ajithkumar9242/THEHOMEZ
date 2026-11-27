@@ -214,3 +214,68 @@ export const updatePartnerProfileSchema = z
 
 export type UpdatePartnerProfileInput = z.infer<typeof updatePartnerProfileSchema>;
 
+/**
+ * Request payload schema for reviewing a partner KYC document (PATCH /api/v1/admin/partners/:partnerId/documents/:docId/status)
+ */
+export const reviewPartnerDocumentSchema = z
+  .object({
+    status: z.enum(['VERIFIED', 'REJECTED'], {
+      message: 'Status must be either VERIFIED or REJECTED',
+    }),
+    rejectionReason: z
+      .string()
+      .trim()
+      .min(10, 'Rejection reason must be at least 10 characters')
+      .max(500, 'Rejection reason cannot exceed 500 characters')
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (data) => (data.status === 'REJECTED' ? Boolean(data.rejectionReason && data.rejectionReason.length >= 10) : true),
+    {
+      message: 'Rejection reason is required and must be at least 10 characters when rejecting a document',
+      path: ['rejectionReason'],
+    },
+  );
+
+export type ReviewPartnerDocumentInput = z.infer<typeof reviewPartnerDocumentSchema>;
+
+/**
+ * Request payload schema for partner reactivation (POST /api/v1/admin/partners/:partnerId/reactivate)
+ */
+export const reactivatePartnerSchema = z
+  .object({
+    reason: z
+      .string({ message: 'Reactivation reason is required' })
+      .trim()
+      .min(10, 'Reactivation reason must be at least 10 characters')
+      .max(500, 'Reactivation reason cannot exceed 500 characters'),
+    attestations: z
+      .object({
+        identityVerified: z.literal(true, {
+          message: 'Identity verification attestation is mandatory',
+        }),
+        addressVerified: z.literal(true, {
+          message: 'Operating address verification attestation is mandatory',
+        }),
+        activeHubsConfirmed: z.literal(true, {
+          message: 'Active service hub confirmation attestation is mandatory',
+        }),
+      })
+      .strict(),
+    waiver: z
+      .object({
+        granted: z.literal(true),
+        reason: z
+          .string()
+          .trim()
+          .min(20, 'Supervisory waiver justification reason must be at least 20 characters')
+          .max(1000, 'Supervisory waiver justification reason cannot exceed 1000 characters'),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+export type ReactivatePartnerInput = z.infer<typeof reactivatePartnerSchema>;
+

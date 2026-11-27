@@ -13,6 +13,8 @@
     "seed:service-areas": "tsx src/seeds/service-areas.seed.ts",
     "seed:categories": "tsx src/seeds/categories.seed.ts",
     "seed:gate3-demo": "tsx src/scripts/seed-gate3-demo-data.ts",
+    "worker:storage-cleanup": "tsx src/scripts/run-storage-cleanup-worker.ts",
+    "reconcile:storage-orphans": "tsx src/scripts/reconcile-storage-orphans.ts",
     "clean": "node -e \"try { fs.rmSync('./dist', { recursive: true, force: true }); } catch (e) {}\""
   },
   "dependencies": {

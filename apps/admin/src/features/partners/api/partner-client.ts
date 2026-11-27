@@ -4,6 +4,15 @@ import type {
   IAdminPartnerQueryDto,
   IPartnerAdminDetailDto,
   IUpdatePartnerStatusDto,
+  IUpdatePartnerProfileDto,
+  IReactivatePartnerDto,
+  IPartnerDocumentListResponseDto,
+  ISignedUrlResponseDto,
+  IReviewPartnerDocumentRequestDto,
+  IReviewPartnerDocumentResponseDto,
+  IDeletePartnerDocumentResponseDto,
+  IScanOverrideRequestDto,
+  IScanOverrideResponseDto,
 } from '@thehomez/shared-types';
 import { apiRequest } from '../../../services/api-client.js';
 
@@ -60,6 +69,22 @@ export const partnerClient = {
   },
 
   /**
+   * API (P1A-13): Update partner profile metadata.
+   * PUT /api/v1/admin/partners/:partnerId
+   */
+  async updatePartnerProfile(
+    partnerId: string,
+    dto: IUpdatePartnerProfileDto,
+    options: PartnerRequestOptions = {},
+  ): Promise<IPartnerAdminDetailDto> {
+    return apiRequest<IPartnerAdminDetailDto>(`/admin/partners/${encodeURIComponent(partnerId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+      signal: options.signal,
+    });
+  },
+
+  /**
    * API 3: Update partner lifecycle status.
    * Enforces 16-state lifecycle transition matrix, revokes refresh tokens on INACTIVE/SUSPENDED,
    * writes immutable audit trail.
@@ -75,6 +100,44 @@ export const partnerClient = {
       {
         method: 'PATCH',
         body: JSON.stringify(dto),
+        signal: options.signal,
+      },
+    );
+  },
+
+  /**
+   * API (P1A-14): Reactivate a partner with KYC proof validation and supervisory waiver.
+   * POST /api/v1/admin/partners/:partnerId/reactivate
+   */
+  async reactivatePartner(
+    partnerId: string,
+    dto: IReactivatePartnerDto,
+    options: PartnerRequestOptions = {},
+  ): Promise<IPartnerAdminDetailDto> {
+    return apiRequest<IPartnerAdminDetailDto>(
+      `/admin/partners/${encodeURIComponent(partnerId)}/reactivate`,
+      {
+        method: 'POST',
+        body: JSON.stringify(dto),
+        signal: options.signal,
+      },
+    );
+  },
+
+  /**
+   * API (P1A-16): Dedicated administrative partner service area assignment.
+   * PUT /api/v1/admin/partners/:partnerId/service-areas
+   */
+  async assignServiceAreas(
+    partnerId: string,
+    serviceAreaIds: string[],
+    options: PartnerRequestOptions = {},
+  ): Promise<{ partnerId: string; serviceAreaIds: string[] }> {
+    return apiRequest<{ partnerId: string; serviceAreaIds: string[] }>(
+      `/admin/partners/${encodeURIComponent(partnerId)}/service-areas`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ serviceAreaIds }),
         signal: options.signal,
       },
     );
@@ -101,6 +164,99 @@ export const partnerClient = {
       {
         method: 'GET',
         signal,
+      },
+    );
+  },
+
+  /**
+   * API 5 (P1A-08): Inspect partner KYC documents list.
+   * GET /api/v1/admin/partners/:partnerId/documents
+   */
+  async getPartnerDocuments(
+    partnerId: string,
+    options: PartnerRequestOptions = {},
+  ): Promise<IPartnerDocumentListResponseDto> {
+    return apiRequest<IPartnerDocumentListResponseDto>(
+      `/admin/partners/${encodeURIComponent(partnerId)}/documents`,
+      {
+        method: 'GET',
+        signal: options.signal,
+      },
+    );
+  },
+
+  /**
+   * API 6 (P1A-09): Generate expiring signed download URL for a partner KYC document.
+   * GET /api/v1/admin/partners/:partnerId/documents/:docId/signed-url
+   */
+  async getPartnerDocumentSignedUrl(
+    partnerId: string,
+    docId: string,
+    options: PartnerRequestOptions = {},
+  ): Promise<ISignedUrlResponseDto> {
+    return apiRequest<ISignedUrlResponseDto>(
+      `/admin/partners/${encodeURIComponent(partnerId)}/documents/${encodeURIComponent(docId)}/signed-url`,
+      {
+        method: 'GET',
+        signal: options.signal,
+      },
+    );
+  },
+
+  /**
+   * API (P1A-15): Review (verify or reject) partner KYC document.
+   * PATCH /api/v1/admin/partners/:partnerId/documents/:docId/status
+   */
+  async reviewPartnerDocument(
+    partnerId: string,
+    docId: string,
+    dto: IReviewPartnerDocumentRequestDto,
+    options: PartnerRequestOptions = {},
+  ): Promise<IReviewPartnerDocumentResponseDto> {
+    return apiRequest<IReviewPartnerDocumentResponseDto>(
+      `/admin/partners/${encodeURIComponent(partnerId)}/documents/${encodeURIComponent(docId)}/status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(dto),
+        signal: options.signal,
+      },
+    );
+  },
+
+  /**
+   * API 7 (P1A-10): Soft delete partner KYC document.
+   * DELETE /api/v1/admin/partners/:partnerId/documents/:docId
+   */
+  async deletePartnerDocument(
+    partnerId: string,
+    docId: string,
+    options: PartnerRequestOptions = {},
+  ): Promise<IDeletePartnerDocumentResponseDto> {
+    return apiRequest<IDeletePartnerDocumentResponseDto>(
+      `/admin/partners/${encodeURIComponent(partnerId)}/documents/${encodeURIComponent(docId)}`,
+      {
+        method: 'DELETE',
+        signal: options.signal,
+      },
+    );
+  },
+
+  /**
+   * API 8 (P1A-11): Security override for infected or failed document scan status.
+   * POST /api/v1/admin/partners/:partnerId/documents/:docId/scan-override
+   */
+  async overrideDocumentScanStatus(
+    partnerId: string,
+    docId: string,
+    dto: IScanOverrideRequestDto,
+    options: PartnerRequestOptions = {},
+  ): Promise<IScanOverrideResponseDto> {
+    return apiRequest<IScanOverrideResponseDto>(
+      `/admin/partners/${encodeURIComponent(partnerId)}/documents/${encodeURIComponent(docId)}/scan-override`,
+      {
+        method: 'POST',
+        body: JSON.stringify(dto),
+        signal: options.signal,
       },
     );
   },
